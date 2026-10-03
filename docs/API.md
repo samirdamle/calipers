@@ -4,6 +4,10 @@
 > **box** and **space**. Angles are 0° = east, clockwise-positive (screen coordinates),
 > range (−180°, 180°].
 
+> Imports: prefer the per-module subpaths (`@samirdamle/calipers/align`) — they are
+> the tree-shakeable primary API and keep the generic type names (`Rect`, `Point`,
+> `Box`, …) out of your scope. The root barrel re-exports everything for convenience.
+
 ## `rectOf` — `@samirdamle/calipers/rect`
 
 Resolve any measurable into a normalized `{ x, y, width, height }`. Reads layout once per call.
@@ -18,6 +22,7 @@ type Measurable =
   | Element                         // incl. SVGElement
   | ArrayLike<Element | string | Rect>
   | Window | 'viewport'             // the viewport rect
+  | Point                           // { x, y } → zero-size rect at that point
   | Rect;                           // { x, y, width, height } passthrough (copy)
 
 interface RectOptions {
@@ -25,6 +30,8 @@ interface RectOptions {
   space?: 'viewport' | 'document';                          // default 'viewport'
 }
 ```
+
+Lists resolve their **first** entry (`rectOf([a, b])` ≡ `rectOf(a)`); an empty list throws.
 
 ### Boxes
 
@@ -40,7 +47,7 @@ Caveats: layout boxes don't account for transformed ancestors — use `visual` w
 
 ### Spaces
 
-`viewport` rects come from `getBoundingClientRect()` and shift on scroll; `document` adds the scroll offsets. `bbox` results are always in local SVG units, independent of space.
+`viewport` rects come from `getBoundingClientRect()` and shift on scroll; `document` adds the scroll offsets — including for the `'viewport'` target itself (`rectOf('viewport', { space: 'document' })` is the viewport rect offset by scroll). `bbox` results are always in local SVG units, independent of space.
 
 ## `measure` / `calipers` — `@samirdamle/calipers/measure`
 
@@ -204,4 +211,4 @@ Per-module budgets (min+br), enforced in CI by `scripts/check-size.mjs`:
 | `align.js` | 2048 B |
 | `index.js` (barrel) | 3584 B |
 
-Current measured sizes: rect 863 B, measure 1723 B, place 1444 B, align 1890 B, index 3123 B.
+Current measured sizes: rect 893 B, measure 1726 B, place 1519 B, align 1870 B, index 3060 B.

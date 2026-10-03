@@ -1,4 +1,6 @@
-import { anchorPoint } from '../measure/index.js';
+import { anchorPoint } from '../geom/index.js';
+import { px, shiftTranslate } from '../internal/dom.js';
+import { rendered } from '../internal/rendered.js';
 import { rectOf } from '../rect/index.js';
 import type { Anchor, Measurable, Point, Rect } from '../types.js';
 
@@ -39,14 +41,9 @@ export function place(el: HTMLElement, options: PlaceOptions = {}): void {
 	if (using === 'transform') {
 		// Translate is relative: deltas in screen px need no frame conversion.
 		const target = targetPoint(options.at, 'viewport');
-		const cur = anchorPoint(
-			rectOf(el, { box: 'visual', space: 'viewport' }),
-			anchor,
-		);
-		const prev = parseTranslate(getComputedStyle(el).translate);
-		const x = prev.x + (target.x + ox - cur.x);
-		const y = prev.y + (target.y + oy - cur.y);
-		el.style.setProperty('translate', `${x}px ${y}px`);
+		const { rect, translate } = rendered(el, 'visual');
+		const cur = anchorPoint(rect, anchor);
+		shiftTranslate(el, translate, target.x + ox - cur.x, target.y + oy - cur.y);
 	} else {
 		placeByPosition(el, anchor, targetPoint(options.at, 'document'), ox, oy);
 	}
@@ -100,9 +97,9 @@ function placeByPosition(
 	ox: number,
 	oy: number,
 ): void {
-	if (getComputedStyle(el).position === 'static')
-		el.style.position = 'absolute';
-	const positioned = getComputedStyle(el).position;
+	const cs = getComputedStyle(el);
+	const positioned = cs.position === 'static' ? 'absolute' : cs.position;
+	if (cs.position === 'static') el.style.position = 'absolute';
 	const op = el.offsetParent as HTMLElement | null;
 
 	const border = rectOf(el, { box: 'border', space: 'document' });
@@ -110,7 +107,6 @@ function placeByPosition(
 		{ x: 0, y: 0, width: border.width, height: border.height },
 		anchor,
 	);
-	const cs = getComputedStyle(el);
 	const ml = px(cs.marginLeft);
 	const mt = px(cs.marginTop);
 
@@ -128,17 +124,4 @@ function placeByPosition(
 	}
 	el.style.left = `${fx + ox - a.x - ml}px`;
 	el.style.top = `${fy + oy - a.y - mt}px`;
-}
-
-/** Parse a CSS length; non-numeric values count as 0. */
-function px(value: string): number {
-	const n = parseFloat(value);
-	return Number.isFinite(n) ? n : 0;
-}
-
-/** Parse computed `translate`: `none` | `<x>` | `<x> <y>` | `<x> <y> <z>`. */
-function parseTranslate(value: string | undefined): Point {
-	if (!value || value === 'none') return { x: 0, y: 0 };
-	const [x = '0', y = '0'] = value.trim().split(/\s+/);
-	return { x: px(x), y: px(y) };
 }

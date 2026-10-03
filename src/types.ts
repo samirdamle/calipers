@@ -30,13 +30,14 @@ export type Box = 'content' | 'border' | 'margin' | 'visual' | 'bbox';
 /** The coordinate space the numbers live in. */
 export type Space = 'viewport' | 'document';
 
-/** Anything the library can measure or place relative to. */
+/** Anything the library can measure or place relative to. A `Point` resolves to a zero-size rect at that point. */
 export type Measurable =
 	| string
 	| Element
 	| ArrayLike<Element | string | Rect>
 	| Window
 	| 'viewport'
+	| Point
 	| Rect;
 
 /**

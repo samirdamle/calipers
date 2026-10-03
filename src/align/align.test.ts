@@ -163,6 +163,22 @@ describe('align', () => {
 		vi.restoreAllMocks();
 	});
 
+	it('aligns to a Rect reference (no element needed)', () => {
+		mockStyle();
+		const reds = [box(10, 0), box(30, 0)];
+		align(reds, 'left', { to: { x: 100, y: 100, width: 50, height: 50 } });
+		expect(reds.map(translateOf)).toEqual(['90px 0px', '70px 0px']);
+		vi.restoreAllMocks();
+	});
+
+	it('aligns to a Point reference (#36)', () => {
+		mockStyle();
+		const reds = [box(10, 0), box(30, 0)];
+		align(reds, 'left', { to: { x: 100, y: 0 } });
+		expect(reds.map(translateOf)).toEqual(['90px 0px', '70px 0px']);
+		vi.restoreAllMocks();
+	});
+
 	it('aligns right edges and bottoms to a reference', () => {
 		mockStyleLive();
 		const blue = box(100, 100, 50, 50); // right 150, bottom 150
