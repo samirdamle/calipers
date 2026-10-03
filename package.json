@@ -50,11 +50,6 @@
 	"main": "./dist/index.js",
 	"name": "@samirdamle/calipers",
 	"packageManager": "pnpm@12.8.1",
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"esbuild"
-		]
-	},
 	"scripts": {
 		"attw": "attw --pack --profile esm-only",
 		"build": "tsup",
