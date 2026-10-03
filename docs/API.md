@@ -145,6 +145,31 @@ interface PlaceAt {
 - `using: 'transform'` sets the CSS `translate` property — compositor-friendly, composes with `transform`, accumulates across calls.
 - `using: 'position'` sets `left`/`top` in the `offsetParent` frame (viewport frame for `fixed`); upgrades `static` → `absolute`; accounts for the offsetParent padding-box origin and margins. Exact for absolute/fixed positioning. Note: positions the border box — an existing `translate` still applies on top.
 
+## `align` / `distribute` — `@samirdamle/calipers/align`
+
+Design-tool verbs, built on `rectOf` plus the CSS `translate` property — compositor-friendly, accumulates across calls, moves a single axis only.
+
+```ts
+align(els: ArrayLike<Element>, edge: AlignEdge, options?: AlignOptions): void
+distribute(els: ArrayLike<Element>, axis: 'x' | 'y', options?: DistributeOptions): void
+
+type AlignEdge = 'left' | 'right' | 'top' | 'bottom' | 'center-x' | 'center-y';
+
+interface AlignOptions {
+  to?: Measurable;  // reference to align to; omit → selection's extreme (edges) or mean (centers)
+  box?: Box;        // default 'border'
+}
+
+interface DistributeOptions {
+  gap?: number;     // fixed gap in px; omit → even spacing across the selection span
+  box?: Box;        // default 'border'
+}
+```
+
+- Without `to`, `align` matches design tools: edges snap to the selection's extreme, centers to its mean.
+- `distribute` processes elements in positional order and is a no-op for fewer than two elements.
+- Elements that don't need to move are left untouched.
+
 ## Shared types
 
 ```ts
@@ -163,6 +188,7 @@ Per-module budgets (min+br), enforced in CI by `scripts/check-size.mjs`:
 | `rect.js` | 1024 B |
 | `measure.js` | 2048 B |
 | `place.js` | 1792 B |
-| `index.js` (barrel) | 2560 B |
+| `align.js` | 1792 B |
+| `index.js` (barrel) | 3072 B |
 
-Current measured sizes: rect 863 B, measure 1723 B, place 1444 B, index 2197 B.
+Current measured sizes: rect 863 B, measure 1723 B, place 1444 B, align 1434 B, index 2691 B.

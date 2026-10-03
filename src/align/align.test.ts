@@ -1,0 +1,153 @@
+import { describe, expect, it, vi } from 'vitest';
+import { align, distribute } from './index.js';
+
+function mockOffset(
+	el: HTMLElement,
+	o: {
+		left: number;
+		top: number;
+		width: number;
+		height: number;
+		parent?: HTMLElement | null;
+	},
+) {
+	for (const [k, v] of Object.entries({
+		offsetLeft: o.left,
+		offsetTop: o.top,
+		offsetWidth: o.width,
+		offsetHeight: o.height,
+		offsetParent: o.parent ?? null,
+	})) {
+		Object.defineProperty(el, k, { value: v, configurable: true });
+	}
+}
+
+function mockStyle(values: Record<string, string> = {}) {
+	vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+		position: 'static',
+		translate: '',
+		borderLeftWidth: '0px',
+		borderRightWidth: '0px',
+		borderTopWidth: '0px',
+		borderBottomWidth: '0px',
+		paddingLeft: '0px',
+		paddingRight: '0px',
+		paddingTop: '0px',
+		paddingBottom: '0px',
+		marginLeft: '0px',
+		marginRight: '0px',
+		marginTop: '0px',
+		marginBottom: '0px',
+		...values,
+	} as unknown as CSSStyleDeclaration);
+}
+
+function translateOf(el: HTMLElement): string {
+	return el.style.getPropertyValue('translate');
+}
+
+function box(left: number, top: number, width = 10, height = 10): HTMLElement {
+	const el = document.createElement('div');
+	mockOffset(el, { left, top, width, height });
+	return el;
+}
+
+describe('align', () => {
+	it('aligns edges to a reference element', () => {
+		mockStyle();
+		const blue = box(100, 100, 50, 50);
+		const reds = [box(10, 0), box(30, 0), box(200, 0)];
+		align(reds, 'left', { to: blue });
+		expect(reds.map(translateOf)).toEqual([
+			'90px 0px',
+			'70px 0px',
+			'-100px 0px',
+		]);
+		vi.restoreAllMocks();
+	});
+
+	it('aligns right edges and bottoms to a reference', () => {
+		mockStyle();
+		const blue = box(100, 100, 50, 50); // right 150, bottom 150
+		const reds = [box(10, 0, 20, 20)];
+		align(reds, 'right', { to: blue });
+		expect(translateOf(reds[0])).toBe('120px 0px');
+		vi.restoreAllMocks();
+		mockStyle({ translate: '120px 0px' }); // as a real browser would report it
+		align(reds, 'bottom', { to: blue });
+		// translate accumulated: previous x stays, y moves 150 − 20 = 130
+		expect(translateOf(reds[0])).toBe('120px 130px');
+		vi.restoreAllMocks();
+	});
+
+	it('aligns to the selection extreme / mean without a reference', () => {
+		mockStyle();
+		const els = [box(10, 30), box(30, 10), box(200, 20)];
+		align(els, 'top');
+		expect(els.map(translateOf)).toEqual(['0px -20px', '', '0px -10px']);
+		vi.restoreAllMocks();
+
+		mockStyle();
+		const els2 = [box(0, 0), box(90, 0), box(200, 0)]; // centers 5, 95, 205 → mean 101.67
+		align(els2, 'center-x');
+		const xs = els2.map((el) => parseFloat(translateOf(el).split(' ')[0]));
+		expect(xs[0]).toBeCloseTo(96.67, 1);
+		expect(xs[1]).toBeCloseTo(6.67, 1);
+		expect(xs[2]).toBeCloseTo(-103.33, 1);
+		vi.restoreAllMocks();
+	});
+
+	it('accumulates over an existing translate', () => {
+		mockStyle({ translate: '5px 7px' });
+		const blue = box(100, 0, 10, 10);
+		const red = box(10, 0);
+		align([red], 'left', { to: blue });
+		expect(translateOf(red)).toBe('95px 7px');
+		vi.restoreAllMocks();
+	});
+
+	it('no-ops on empty lists', () => {
+		mockStyle();
+		expect(() => align([], 'left')).not.toThrow();
+		vi.restoreAllMocks();
+	});
+});
+
+describe('distribute', () => {
+	it('spaces evenly with a fixed gap, in positional order', () => {
+		mockStyle();
+		const els = [box(100, 0), box(0, 0), box(50, 0)]; // given out of order
+		distribute(els, 'x', { gap: 20 });
+		// sorted: x=0 → stays (untouched); x=50 → 30; x=100 → 60
+		expect(translateOf(els[0])).toBe('-40px 0px');
+		expect(translateOf(els[1])).toBe('');
+		expect(translateOf(els[2])).toBe('-20px 0px');
+		vi.restoreAllMocks();
+	});
+
+	it('auto-computes even spacing across the span', () => {
+		mockStyle();
+		const els = [box(0, 0), box(30, 0), box(100, 0)]; // span 110, sizes 30 → gap 40
+		distribute(els, 'x');
+		expect(translateOf(els[0])).toBe('');
+		expect(translateOf(els[1])).toBe('20px 0px');
+		expect(translateOf(els[2])).toBe('');
+		vi.restoreAllMocks();
+	});
+
+	it('distributes along y', () => {
+		mockStyle();
+		const els = [box(0, 0), box(0, 100)];
+		distribute(els, 'y', { gap: 10 });
+		expect(translateOf(els[0])).toBe('');
+		expect(translateOf(els[1])).toBe('0px -80px');
+		vi.restoreAllMocks();
+	});
+
+	it('no-ops with fewer than two elements', () => {
+		mockStyle();
+		expect(() => distribute([], 'x')).not.toThrow();
+		expect(() => distribute([box(0, 0)], 'x')).not.toThrow();
+		vi.restoreAllMocks();
+	});
+});
