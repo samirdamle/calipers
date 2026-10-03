@@ -1,0 +1,72 @@
+{
+	"description": "Tiny, dependency-free geometry toolkit for the web: measure, align, place, and design with HTML and SVG elements.",
+	"devDependencies": {
+		"@arethetypeswrong/cli": "^0.18.2",
+		"@biomejs/biome": "^2.2.0",
+		"esbuild": "^0.25.0",
+		"happy-dom": "^18.0.1",
+		"tsup": "^8.5.0",
+		"typescript": "~5.9.2",
+		"vitest": "^3.2.4"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./align": {
+			"types": "./dist/align.d.ts",
+			"default": "./dist/align.js"
+		},
+		"./debug": {
+			"types": "./dist/debug.d.ts",
+			"default": "./dist/debug.js"
+		},
+		"./fit": {
+			"types": "./dist/fit.d.ts",
+			"default": "./dist/fit.js"
+		},
+		"./measure": {
+			"types": "./dist/measure.d.ts",
+			"default": "./dist/measure.js"
+		},
+		"./package.json": "./package.json",
+		"./place": {
+			"types": "./dist/place.d.ts",
+			"default": "./dist/place.js"
+		},
+		"./rect": {
+			"types": "./dist/rect.d.ts",
+			"default": "./dist/rect.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"license": "MIT",
+	"main": "./dist/index.js",
+	"name": "@samirdamle/calipers",
+	"packageManager": "pnpm@12.8.1",
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"esbuild"
+		]
+	},
+	"scripts": {
+		"attw": "attw --pack --profile esm-only",
+		"build": "tsup",
+		"ci": "pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm size",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"size": "node scripts/check-size.mjs",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
+	},
+	"sideEffects": false,
+	"type": "module",
+	"types": "./dist/index.d.ts",
+	"version": "0.0.0"
+}
