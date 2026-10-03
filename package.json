@@ -54,6 +54,7 @@
 		"attw": "attw --pack --profile esm-only",
 		"build": "tsup",
 		"ci": "pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm size",
+		"demo": "pnpm build && node scripts/serve.mjs demo",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"size": "node scripts/check-size.mjs",
