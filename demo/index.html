@@ -59,16 +59,18 @@
   <pre id="readout"></pre>
 
   <h2>Place — put A's anchor on B's anchor</h2>
-  <p class="hint">Moves A so its selected anchor lands exactly on B's selected anchor. Translate shifts the drawn box (composable, easy to reset); left/top moves it for real in layout.</p>
+  <p class="hint">Moves A so its selected anchor lands exactly on B's selected anchor. Gap pushes A back off B along the direction its anchor faces. Translate shifts the drawn box (composable, easy to reset); left/top moves it for real in layout.</p>
   <div class="controls">
     <button type="button" id="placeBtn">Place</button>
+    <label>gap x <input type="number" id="placeGapX" value="0" step="1" /></label>
+    <label>gap y <input type="number" id="placeGapY" value="0" step="1" /></label>
     <label><input type="checkbox" id="useTranslate" checked /> Use CSS translate instead of CSS left/top</label>
     <button type="button" id="reset">reset A</button>
   </div>
   <pre id="placeCode">// click Place</pre>
 
   <h2>Align — many objects</h2>
-  <p class="hint">Drag the boxes, then align the reds to the blue box — or stack them. Alignment stays on (highlighted) and doubles as the stack's sideways alignment.</p>
+  <p class="hint">Drag the boxes, then align the reds to the blue box — or stack them. Alignment stays on (highlighted) and doubles as the stack's sideways alignment. Give gap x and y different values for a staircase cascade.</p>
   <div class="controls">
     <button type="button" data-align="left">left</button>
     <button type="button" data-align="center-x">center-x</button>
@@ -87,7 +89,8 @@
     <button type="button" data-stack-dir="b">down</button>
     <button type="button" data-stack-dir="l">left</button>
     <button type="button" data-stack-dir="r">right</button>
-    <label>gap <input type="number" id="stackGap" value="10" min="0" step="1" /></label>
+    <label>gap x <input type="number" id="stackGapX" value="10" step="1" /></label>
+    <label>gap y <input type="number" id="stackGapY" value="10" step="1" /></label>
   </div>
   <pre id="arrangeCode">// click align, distribute, or a stack direction</pre>
   <div id="stage2">
@@ -275,13 +278,21 @@
   for (const sel of [anchorA, anchorB, boxSel, spaceSel]) sel.addEventListener('change', update);
   dimsOn.addEventListener('change', update);
 
-  // Place demo: A's selected anchor onto B's selected anchor, exactly.
+  // Place demo: A's selected anchor onto B's selected anchor, plus gap.
   document.getElementById('placeBtn').addEventListener('click', () => {
     const using = document.getElementById('useTranslate').checked ? 'transform' : 'position';
     const anchor = anchorA.value, ofAnchor = anchorB.value;
-    place(boxA, { anchor, at: { anchor: ofAnchor, of: boxB }, using });
+    const gx = parseFloat(document.getElementById('placeGapX').value) || 0;
+    const gy = parseFloat(document.getElementById('placeGapY').value) || 0;
+    const opts = { anchor, at: { anchor: ofAnchor, of: boxB }, using };
+    let gapStr = '';
+    if (gx !== 0 || gy !== 0) {
+      opts.gap = { x: gx, y: gy };
+      gapStr = `, gap: { x: ${gx}, y: ${gy} }`;
+    }
+    place(boxA, opts);
     document.getElementById('placeCode').textContent =
-      `place(boxA, { anchor: '${anchor}', at: { anchor: '${ofAnchor}', of: boxB }, using: '${using}' })`;
+      `place(boxA, { anchor: '${anchor}', at: { anchor: '${ofAnchor}', of: boxB }, using: '${using}'${gapStr} })`;
     update();
   });
   document.getElementById('reset').addEventListener('click', () => {
@@ -336,10 +347,15 @@
       document.querySelectorAll('[data-stack-dir]').forEach((b) => { b.classList.toggle('on', b === btn); });
       const dir = btn.dataset.stackDir;
       if (dir === 'none') return;
-      const gap = Math.max(0, parseFloat(document.getElementById('stackGap').value) || 0);
+      const gx = parseFloat(document.getElementById('stackGapX').value) || 0;
+      const gy = parseFloat(document.getElementById('stackGapY').value) || 0;
+      // Equal x/y gaps collapse to the scalar form (axial only, as before);
+      // different values cascade each step into a staircase.
+      const gap = gx === gy ? gx : { x: gx, y: gy };
+      const gapStr = gx === gy ? `${gx}` : `{ x: ${gx}, y: ${gy} }`;
       const lateral = lateralFor(dir);
       stack(reds2, { to: blue2, direction: dir, gap, align: lateral });
-      showCall(`stack(reds, { to: blue, direction: '${dir}', gap: ${gap}, align: '${lateral}' })`);
+      showCall(`stack(reds, { to: blue, direction: '${dir}', gap: ${gapStr}, align: '${lateral}' })`);
     });
   });
   document.getElementById('reset2').addEventListener('click', () => {

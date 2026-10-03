@@ -52,6 +52,42 @@ describe('stack', () => {
 		vi.restoreAllMocks();
 	});
 
+	it('cascades laterally with a 2D gap', () => {
+		mockStyle();
+		const blue = box(100, 100, 50, 50); // bottom 150, center-x 125
+		const reds = [box(0, 0), box(200, 0)];
+		stack(reds, {
+			to: blue,
+			direction: 'b',
+			gap: { x: 10, y: 20 },
+			align: 'c',
+		});
+		// axial slots at y=170, y=200; lateral center 125 + step * 10
+		expect(reds.map(translateOf)).toEqual(['130px 170px', '-60px 200px']);
+		vi.restoreAllMocks();
+	});
+
+	it('is idempotent with a 2D gap', () => {
+		mockStyleLive();
+		const blue = box(100, 100, 50, 50);
+		const reds = [box(0, 0), box(200, 0)];
+		stack(reds, {
+			to: blue,
+			direction: 'b',
+			gap: { x: 10, y: 20 },
+			align: 'c',
+		});
+		const afterFirst = reds.map(translateOf);
+		stack(reds, {
+			to: blue,
+			direction: 'b',
+			gap: { x: 10, y: 20 },
+			align: 'c',
+		});
+		expect(reds.map(translateOf)).toEqual(afterFirst);
+		vi.restoreAllMocks();
+	});
+
 	it('is idempotent: repeating the same call is a no-op', () => {
 		mockStyleLive();
 		const blue = box(100, 100, 50, 50);

@@ -130,7 +130,7 @@ type Anchor =
 
 ## `place` — `@samirdamle/calipers/place`
 
-Position `el` so its anchor lands on the target point, plus `offset`.
+Position `el` so its anchor lands on the target point, plus `offset` and `gap`.
 
 ```ts
 place(el: HTMLElement, options?: PlaceOptions): void
@@ -139,6 +139,7 @@ interface PlaceOptions {
   anchor?: Anchor;                 // which point of el to position. default 'tl'
   at?: PlaceAt | Point | Rect;     // default: viewport center
   offset?: { x?: number; y?: number };
+  gap?: Gap;                       // px between the placed box and the target; see below
   using?: 'transform' | 'position'; // default 'transform'
 }
 
@@ -151,6 +152,7 @@ interface PlaceAt {
 - `at` as a raw `{ x, y }` point is interpreted in **viewport** coordinates (e.g. mouse `clientX/Y`).
 - `using: 'transform'` sets the CSS `translate` property — compositor-friendly, composes with `transform`, accumulates across calls.
 - `using: 'position'` sets `left`/`top` in the `offsetParent` frame (viewport frame for `fixed`); upgrades `static` → `absolute`; accounts for the offsetParent padding-box origin and margins. Exact for absolute/fixed positioning. Note: positions the border box — an existing `translate` still applies on top.
+- `gap` pushes the box *away* from the target along the ray from the anchor through the box center — `place(tip, { anchor: 'tc', at: { anchor: 'bc', of: btn }, gap: 8 })` puts the tooltip 8px below the button. Unlike `offset` (a raw signed shift), the gap's direction is automatic. A center anchor has no direction, so the gap is a no-op there. Negative values overlap.
 
 ## `align` / `distribute` / `stack` — `@samirdamle/calipers/align`
 
@@ -179,7 +181,7 @@ type StackAlign = 't' | 'b' | 'l' | 'r' | 'c';
 interface StackOptions {
   to?: Measurable;      // reference to stack from; omit → the selection's trailing extreme in the stacking direction
   direction?: StackDirection; // which way the stack grows; default 'b'
-  gap?: number;         // px between consecutive boxes; default 0
+  gap?: Gap;            // axial separation; [x, y] / { x, y } adds a per-step lateral cascade; default 0
   align?: StackAlign;    // lateral alignment vs the anchor box; default 'c' (only the perpendicular axis applies)
   box?: Box;            // default 'border'
 }
@@ -197,6 +199,7 @@ interface Point { x: number; y: number }
 interface Rect { x: number; y: number; width: number; height: number }
 type Box = 'content' | 'border' | 'margin' | 'visual' | 'bbox';
 type Space = 'viewport' | 'document';
+type Gap = number | [number, number] | { x: number; y: number }; // per-axis px; negative overlaps
 ```
 
 ## Size budgets
@@ -211,4 +214,4 @@ Per-module budgets (min+br), enforced in CI by `scripts/check-size.mjs`:
 | `align.js` | 2048 B |
 | `index.js` (barrel) | 3584 B |
 
-Current measured sizes: rect 893 B, measure 1726 B, place 1519 B, align 1870 B, index 3060 B.
+Current measured sizes: rect 893 B, measure 1726 B, place 1625 B, align 1949 B, index 3177 B.

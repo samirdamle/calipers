@@ -1,8 +1,9 @@
 import { anchorPoint } from '../geom/index.js';
 import { px, shiftTranslate } from '../internal/dom.js';
+import { normalizeGap } from '../internal/gap.js';
 import { rendered } from '../internal/rendered.js';
 import { rectOf } from '../rect/index.js';
-import type { Anchor, Measurable, Point, Rect } from '../types.js';
+import type { Anchor, Gap, Measurable, Point, Rect } from '../types.js';
 
 export interface PlaceAt {
 	/** Anchor of the `of` target. @default 'cc' */
@@ -22,6 +23,15 @@ export interface PlaceOptions {
 	/** Extra shift in px. */
 	offset?: { x?: number; y?: number };
 	/**
+	 * Gap in px between the placed box and the target. Unlike `offset`
+	 * (a raw signed shift), the gap pushes the box *away* from the target
+	 * along the ray from the anchor through the box center — e.g.
+	 * `place(tip, { anchor: 'tc', at: { anchor: 'bc', of: btn }, gap: 8 })`
+	 * puts the tooltip 8px below the button. A center anchor has no
+	 * direction, so the gap is a no-op there (use `offset` instead).
+	 */
+	gap?: Gap;
+	/**
 	 * `transform` (default): sets the CSS `translate` property — compositor-friendly,
 	 * composes with `transform`, accumulates across calls.
 	 * `position`: sets `left`/`top` (upgrades `static` to `absolute`);
@@ -31,22 +41,46 @@ export interface PlaceOptions {
 }
 
 /**
- * Position `el` so its anchor lands on the target point, plus `offset`.
- * Reads layout once per call.
+ * Position `el` so its anchor lands on the target point, plus `offset` and `gap`.
+ * Reads layout once per call. Repeating the same call is a no-op.
  */
 export function place(el: HTMLElement, options: PlaceOptions = {}): void {
 	const { anchor = 'tl', offset = {}, using = 'transform' } = options;
 	const ox = offset.x ?? 0;
 	const oy = offset.y ?? 0;
+	const gap = normalizeGap(options.gap);
 	if (using === 'transform') {
 		// Translate is relative: deltas in screen px need no frame conversion.
 		const target = targetPoint(options.at, 'viewport');
 		const { rect, translate } = rendered(el, 'visual');
 		const cur = anchorPoint(rect, anchor);
-		shiftTranslate(el, translate, target.x + ox - cur.x, target.y + oy - cur.y);
+		const dir = gapDirection(rect, anchor);
+		shiftTranslate(
+			el,
+			translate,
+			target.x + ox + gap.x * dir.x - cur.x,
+			target.y + oy + gap.y * dir.y - cur.y,
+		);
 	} else {
-		placeByPosition(el, anchor, targetPoint(options.at, 'document'), ox, oy);
+		placeByPosition(
+			el,
+			anchor,
+			targetPoint(options.at, 'document'),
+			ox,
+			oy,
+			gap,
+		);
 	}
+}
+
+/**
+ * Per-axis push direction for `gap`: the sign of (box center − anchor point).
+ * A center anchor yields (0, 0) — there is no direction to push.
+ */
+function gapDirection(rect: Rect, anchor: Anchor): Point {
+	const c = anchorPoint(rect, 'cc');
+	const p = anchorPoint(rect, anchor);
+	return { x: Math.sign(c.x - p.x), y: Math.sign(c.y - p.y) };
 }
 
 /** Resolve the target to a point in the requested space. Raw points are viewport coords. */
@@ -96,6 +130,7 @@ function placeByPosition(
 	target: Point,
 	ox: number,
 	oy: number,
+	gap: Point,
 ): void {
 	const cs = getComputedStyle(el);
 	const positioned = cs.position === 'static' ? 'absolute' : cs.position;
@@ -107,6 +142,7 @@ function placeByPosition(
 		{ x: 0, y: 0, width: border.width, height: border.height },
 		anchor,
 	);
+	const dir = gapDirection(border, anchor);
 	const ml = px(cs.marginLeft);
 	const mt = px(cs.marginTop);
 
@@ -122,6 +158,6 @@ function placeByPosition(
 		fx -= window.scrollX;
 		fy -= window.scrollY;
 	}
-	el.style.left = `${fx + ox - a.x - ml}px`;
-	el.style.top = `${fy + oy - a.y - mt}px`;
+	el.style.left = `${fx + ox + gap.x * dir.x - a.x - ml}px`;
+	el.style.top = `${fy + oy + gap.y * dir.y - a.y - mt}px`;
 }

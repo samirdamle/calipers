@@ -204,3 +204,85 @@ describe('place using position', () => {
 		mockScroll(0, 0);
 	});
 });
+
+describe('place gap', () => {
+	it('pushes the box away from the target along the anchor ray (transform)', () => {
+		const el = document.createElement('div');
+		vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(
+			fakeDOMRect(0, 0, 50, 40),
+		);
+		mockStyle();
+		place(el, { anchor: 'tc', at: { x: 200, y: 200 }, gap: 10 });
+		// cur tc = (25, 0); dir (0, +1); delta = (200 − 25, 200 + 10 − 0)
+		expect(translateOf(el)).toBe('175px 210px');
+		vi.restoreAllMocks();
+	});
+
+	it('applies per-axis gaps from tuples and objects', () => {
+		for (const gap of [[5, 15], { x: 5, y: 15 }] as const) {
+			const el = document.createElement('div');
+			vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(
+				fakeDOMRect(0, 0, 50, 40),
+			);
+			mockStyle();
+			place(el, { anchor: 'br', at: { x: 200, y: 200 }, gap });
+			// cur br = (50, 40); dir (−1, −1); delta = (200 − 5 − 50, 200 − 15 − 40)
+			expect(translateOf(el)).toBe('145px 145px');
+			vi.restoreAllMocks();
+		}
+	});
+
+	it('is a no-op with a center anchor', () => {
+		const el = document.createElement('div');
+		vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(
+			fakeDOMRect(0, 0, 50, 40),
+		);
+		mockStyle();
+		place(el, { anchor: 'cc', at: { x: 200, y: 200 }, gap: 10 });
+		// cur cc = (25, 20); dir (0, 0) → delta (175, 180), same as gap: 0
+		expect(translateOf(el)).toBe('175px 180px');
+		vi.restoreAllMocks();
+	});
+
+	it('applies in position mode', () => {
+		const el = document.createElement('div');
+		el.style.position = 'absolute';
+		mockOffset(el, { left: 0, top: 0, width: 100, height: 50, parent: null });
+		mockStyle({ position: 'absolute' });
+		place(el, {
+			anchor: 'tl',
+			at: { x: 300, y: 300 },
+			gap: 10,
+			using: 'position',
+		});
+		// dir for 'tl' = (+1, +1); left = 300 + 10, top = 300 + 10
+		expect(el.style.left).toBe('310px');
+		expect(el.style.top).toBe('310px');
+		vi.restoreAllMocks();
+	});
+
+	it('is idempotent: repeating the call is a no-op', () => {
+		const el = document.createElement('div');
+		// getBoundingClientRect reflects the live translate, like a browser.
+		vi.spyOn(el, 'getBoundingClientRect').mockImplementation(() => {
+			const t = el.style.getPropertyValue('translate').split(' ');
+			const x = parseFloat(t[0]) || 0;
+			const y = parseFloat(t[1]) || 0;
+			return fakeDOMRect(x, y, 50, 40);
+		});
+		vi.spyOn(window, 'getComputedStyle').mockImplementation(
+			(target: Element) =>
+				({
+					position: 'static',
+					translate:
+						(target as HTMLElement).style.getPropertyValue('translate') ||
+						'none',
+				}) as unknown as CSSStyleDeclaration,
+		);
+		place(el, { anchor: 'tc', at: { x: 200, y: 200 }, gap: 10 });
+		expect(translateOf(el)).toBe('175px 210px');
+		place(el, { anchor: 'tc', at: { x: 200, y: 200 }, gap: 10 });
+		expect(translateOf(el)).toBe('175px 210px');
+		vi.restoreAllMocks();
+	});
+});

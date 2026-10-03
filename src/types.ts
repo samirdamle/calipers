@@ -30,6 +30,12 @@ export type Box = 'content' | 'border' | 'margin' | 'visual' | 'bbox';
 /** The coordinate space the numbers live in. */
 export type Space = 'viewport' | 'document';
 
+/**
+ * A per-axis gap in px. A single number applies to both axes;
+ * `[x, y]` / `{ x, y }` set each axis separately. Negative values overlap.
+ */
+export type Gap = number | readonly [number, number] | { x: number; y: number };
+
 /** Anything the library can measure or place relative to. A `Point` resolves to a zero-size rect at that point. */
 export type Measurable =
 	| string

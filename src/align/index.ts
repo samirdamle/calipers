@@ -1,7 +1,8 @@
 import { isElement, shiftTranslate } from '../internal/dom.js';
+import { normalizeGap } from '../internal/gap.js';
 import { rendered } from '../internal/rendered.js';
 import { rectOf } from '../rect/index.js';
-import type { Box, Measurable, Rect } from '../types.js';
+import type { Box, Gap, Measurable, Rect } from '../types.js';
 
 export type AlignEdge =
 	| 'left'
@@ -175,8 +176,14 @@ export interface StackOptions {
 	to?: Measurable;
 	/** Which way the stack grows. @default 'b' */
 	direction?: StackDirection;
-	/** Gap in px between consecutive boxes. @default 0 */
-	gap?: number;
+	/**
+	 * Gap between consecutive boxes. A single number is the axial separation
+	 * (as before); `[x, y]` / `{ x, y }` keeps the axial meaning on the
+	 * stacking axis and adds a per-step lateral cascade on the other —
+	 * e.g. `gap: { x: 12, y: 10 }` with `direction: 'b'` stacks boxes 10px
+	 * apart, each 12px further right: a staircase. @default 0
+	 */
+	gap?: Gap;
 	/**
 	 * Lateral alignment relative to the anchor box. @default 'c'
 	 */
@@ -202,10 +209,19 @@ export function stack(
 	if (list.length === 0) return;
 	const box = options.box ?? 'border';
 	const direction = options.direction ?? 'b';
-	const gap = options.gap ?? 0;
 	const lateral = options.align ?? 'c';
 	const ax: Axis = direction === 't' || direction === 'b' ? 'y' : 'x';
 	const forward = direction === 'b' || direction === 'r';
+	const gap = normalizeGap(options.gap);
+	const gapAx = ax === 'x' ? gap.x : gap.y;
+	// A scalar gap is purely axial (backward compatible); only an explicit
+	// per-axis gap adds a lateral cascade.
+	const gapLat =
+		typeof options.gap === 'number' || options.gap === undefined
+			? 0
+			: ax === 'x'
+				? gap.y
+				: gap.x;
 
 	const items = list.map((el) => ({ el, ...rendered(el, box) }));
 
@@ -241,20 +257,22 @@ export function stack(
 
 	// The anchor's leading edge, where the first slot starts.
 	let cursor = forward
-		? pos(anchorRect, ax) + size(anchorRect, ax) + gap
-		: pos(anchorRect, ax) - gap;
+		? pos(anchorRect, ax) + size(anchorRect, ax) + gapAx
+		: pos(anchorRect, ax) - gapAx;
+	let step = 0;
 	for (const { el, rect, translate } of targets) {
+		step += 1;
 		const s = size(rect, ax);
 		const slot = forward ? cursor : cursor - s;
 		const delta = slot - pos(rect, ax);
-		const lat = lateralOffset(lateral, anchorRect, rect, ax);
+		const lat = lateralOffset(lateral, anchorRect, rect, ax) + step * gapLat;
 		shiftTranslate(
 			el,
 			translate,
 			ax === 'x' ? delta : lat,
 			ax === 'y' ? delta : lat,
 		);
-		cursor = forward ? slot + s + gap : slot - gap;
+		cursor = forward ? slot + s + gapAx : slot - gapAx;
 	}
 }
 
