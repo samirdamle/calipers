@@ -93,6 +93,27 @@ describe('rectOf input normalization', () => {
 		expect(rectOf(window)).toEqual(expected);
 	});
 
+	it('offsets the viewport rect by scroll in document space (#34)', () => {
+		mockScroll(120, 80);
+		expect(rectOf('viewport', { space: 'document' })).toEqual({
+			x: 120,
+			y: 80,
+			width: window.innerWidth,
+			height: window.innerHeight,
+		});
+		// viewport space is unaffected by scroll
+		expect(rectOf('viewport', { space: 'viewport' })).toEqual({
+			x: 0,
+			y: 0,
+			width: window.innerWidth,
+			height: window.innerHeight,
+		});
+	});
+
+	it('resolves a Point to a zero-size rect (#36)', () => {
+		expect(rectOf({ x: 5, y: 7 })).toEqual({ x: 5, y: 7, width: 0, height: 0 });
+	});
+
 	it('resolves selectors (first match) and throws on no match', () => {
 		document.body.innerHTML = '<div id="t1"></div>';
 		const el = document.getElementById('t1') as HTMLElement;

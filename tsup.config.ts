@@ -7,12 +7,12 @@ export default defineConfig({
 		measure: 'src/measure/index.ts',
 		place: 'src/place/index.ts',
 		align: 'src/align/index.ts',
-		fit: 'src/fit/index.ts',
-		debug: 'src/debug/index.ts',
 	},
 	format: ['esm'],
 	dts: true,
-	sourcemap: true,
+	// No sourcemaps: they are several times the size of the code and
+	// consumers of the library never need them.
+	sourcemap: false,
 	clean: true,
 	treeshake: true,
 	// Each entry is self-contained: importing one module never pulls a shared

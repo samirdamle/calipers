@@ -1,4 +1,5 @@
-import type { Box, Measurable, Rect, Space } from '../types.js';
+import { isElement, px } from '../internal/dom.js';
+import type { Box, Measurable, Point, Rect, Space } from '../types.js';
 
 export interface RectOptions {
 	/**
@@ -25,7 +26,8 @@ type Target =
 
 /**
  * Resolve any measurable into a normalized `{ x, y, width, height }` rect.
- * Reads layout exactly once per call.
+ * A `Point` resolves to a zero-size rect at that point. Lists resolve their
+ * first entry. Reads layout exactly once per call.
  */
 export function rectOf(target: Measurable, options: RectOptions = {}): Rect {
 	const { box = 'border', space = 'viewport' } = options;
@@ -34,12 +36,16 @@ export function rectOf(target: Measurable, options: RectOptions = {}): Rect {
 		case 'rect':
 			return { ...t.rect };
 		case 'viewport':
-			return {
-				x: 0,
-				y: 0,
-				width: window.innerWidth,
-				height: window.innerHeight,
-			};
+			return moveSpace(
+				{
+					x: 0,
+					y: 0,
+					width: window.innerWidth,
+					height: window.innerHeight,
+				},
+				'viewport',
+				space,
+			);
 		case 'element':
 			return elementRect(t.el, box, space);
 	}
@@ -55,14 +61,25 @@ function classify(target: Measurable): Target {
 	}
 	if (isElement(target)) return { kind: 'element', el: target };
 	if (isRectLike(target)) return { kind: 'rect', rect: target };
+	if (isPointLike(target))
+		return {
+			kind: 'rect',
+			rect: { x: target.x, y: target.y, width: 0, height: 0 },
+		};
 	const first = (target as ArrayLike<Element | string | Rect>)[0];
 	if (first == null)
 		throw new Error('calipers: empty list has no measurable to resolve');
 	return classify(first);
 }
 
-function isElement(v: unknown): v is Element {
-	return typeof Element !== 'undefined' && v instanceof Element;
+function isPointLike(v: unknown): v is Point {
+	return (
+		typeof v === 'object' &&
+		v !== null &&
+		typeof (v as Point).x === 'number' &&
+		typeof (v as Point).y === 'number' &&
+		typeof (v as { width?: unknown }).width !== 'number'
+	);
 }
 
 function isRectLike(v: unknown): v is Rect {
@@ -184,10 +201,4 @@ function moveSpace(rect: Rect, from: Space, to: Space): Rect {
 		width: rect.width,
 		height: rect.height,
 	};
-}
-
-/** Parse a CSS length; non-numeric values (e.g. `auto`) count as 0. */
-function px(value: string): number {
-	const n = parseFloat(value);
-	return Number.isFinite(n) ? n : 0;
 }

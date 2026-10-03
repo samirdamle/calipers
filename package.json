@@ -21,14 +21,6 @@
 			"types": "./dist/align.d.ts",
 			"default": "./dist/align.js"
 		},
-		"./debug": {
-			"types": "./dist/debug.d.ts",
-			"default": "./dist/debug.js"
-		},
-		"./fit": {
-			"types": "./dist/fit.d.ts",
-			"default": "./dist/fit.js"
-		},
 		"./measure": {
 			"types": "./dist/measure.d.ts",
 			"default": "./dist/measure.js"
