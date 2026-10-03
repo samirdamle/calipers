@@ -56,14 +56,11 @@
   </div>
   <pre id="readout"></pre>
 
-  <h2>Place — put A relative to B</h2>
+  <h2>Place — put A's anchor on B's anchor</h2>
+  <p class="hint">Moves A so its selected anchor lands exactly on B's selected anchor. Translate shifts the drawn box (composable, easy to reset); left/top moves it for real in layout.</p>
   <div class="controls">
-    <button type="button" data-place="above">above</button>
-    <button type="button" data-place="below">below</button>
-    <button type="button" data-place="left">left</button>
-    <button type="button" data-place="right">right</button>
-    <button type="button" data-place="center">center on</button>
-    <label><input type="checkbox" id="usePosition" /> use left/top instead of translate</label>
+    <button type="button" id="placeBtn">Place</button>
+    <label><input type="checkbox" id="useTranslate" checked /> Use CSS translate instead of CSS left/top</label>
     <button type="button" id="reset">reset A</button>
   </div>
 
@@ -264,20 +261,15 @@
   for (const sel of [anchorA, anchorB, boxSel, spaceSel]) sel.addEventListener('change', update);
   dimsOn.addEventListener('change', update);
 
-  // Place demos.
-  const placements = {
-    above:  { anchor: 'bc', at: { anchor: 'tc', of: boxB }, offset: { y: -8 } },
-    below:  { anchor: 'tc', at: { anchor: 'bc', of: boxB }, offset: { y: 8 } },
-    left:   { anchor: 'cr', at: { anchor: 'cl', of: boxB }, offset: { x: -8 } },
-    right:  { anchor: 'cl', at: { anchor: 'cr', of: boxB }, offset: { x: 8 } },
-    center: { anchor: 'cc', at: { anchor: 'cc', of: boxB } },
-  };
-  document.querySelectorAll('[data-place]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const using = document.getElementById('usePosition').checked ? 'position' : 'transform';
-      place(boxA, { ...placements[btn.dataset.place], using });
-      update();
+  // Place demo: A's selected anchor onto B's selected anchor, exactly.
+  document.getElementById('placeBtn').addEventListener('click', () => {
+    const using = document.getElementById('useTranslate').checked ? 'transform' : 'position';
+    place(boxA, {
+      anchor: anchorA.value,
+      at: { anchor: anchorB.value, of: boxB },
+      using,
     });
+    update();
   });
   document.getElementById('reset').addEventListener('click', () => {
     boxA.style.removeProperty('translate');
