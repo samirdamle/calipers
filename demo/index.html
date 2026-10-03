@@ -65,9 +65,10 @@
     <label><input type="checkbox" id="useTranslate" checked /> Use CSS translate instead of CSS left/top</label>
     <button type="button" id="reset">reset A</button>
   </div>
+  <pre id="placeCode">// click Place</pre>
 
   <h2>Align — many objects</h2>
-  <p class="hint">Drag the boxes, then align the reds to the blue box in one go — or distribute them.</p>
+  <p class="hint">Drag the boxes, then align the reds to the blue box — or stack them. Alignment stays on (highlighted) and doubles as the stack's sideways alignment.</p>
   <div class="controls">
     <button type="button" data-align="left">left</button>
     <button type="button" data-align="center-x">center-x</button>
@@ -81,18 +82,14 @@
   </div>
   <div class="controls">
     <span>stack</span>
+    <button type="button" data-stack-dir="none" class="on">none</button>
     <button type="button" data-stack-dir="t">up</button>
-    <button type="button" data-stack-dir="b" class="on">down</button>
+    <button type="button" data-stack-dir="b">down</button>
     <button type="button" data-stack-dir="l">left</button>
     <button type="button" data-stack-dir="r">right</button>
     <label>gap <input type="number" id="stackGap" value="10" min="0" step="1" /></label>
-    <select id="stackAlign">
-      <option value="start">left/top</option>
-      <option value="c" selected>center</option>
-      <option value="end">right/bottom</option>
-    </select>
-    <button type="button" id="stackBtn">stack from blue</button>
   </div>
+  <pre id="arrangeCode">// click align, distribute, or a stack direction</pre>
   <div id="stage2">
     <div class="box red" style="width:110px;height:60px;left:40px;top:40px">1</div>
     <div class="box red" style="width:80px;height:80px;left:200px;top:140px">2</div>
@@ -253,6 +250,7 @@
     }
 
     readout.textContent =
+      `measure(boxA, boxB, { anchor: '${anchorA.value}', ofAnchor: '${anchorB.value}', box: '${boxSel.value}', space: '${spaceSel.value}' })\n` +
       `pointA ${JSON.stringify(fmtObj(r.pointA))}   pointB ${JSON.stringify(fmtObj(r.pointB))}\n` +
       `dx ${fmt(r.dx)}   dy ${fmt(r.dy)}   distance ${fmt(r.distance)}\n` +
       `gapX ${fmt(r.gapX)}   gapY ${fmt(r.gapY)}   angle ${fmt(r.angleDeg)}°\n` +
@@ -280,11 +278,10 @@
   // Place demo: A's selected anchor onto B's selected anchor, exactly.
   document.getElementById('placeBtn').addEventListener('click', () => {
     const using = document.getElementById('useTranslate').checked ? 'transform' : 'position';
-    place(boxA, {
-      anchor: anchorA.value,
-      at: { anchor: anchorB.value, of: boxB },
-      using,
-    });
+    const anchor = anchorA.value, ofAnchor = anchorB.value;
+    place(boxA, { anchor, at: { anchor: ofAnchor, of: boxB }, using });
+    document.getElementById('placeCode').textContent =
+      `place(boxA, { anchor: '${anchor}', at: { anchor: '${ofAnchor}', of: boxB }, using: '${using}' })`;
     update();
   });
   document.getElementById('reset').addEventListener('click', () => {
@@ -295,29 +292,55 @@
   });
 
   // Align demos: reds to the blue box, or distribute the reds.
+  // Align buttons keep a persistent highlight per axis — the alignment stays
+  // in effect (via translate) and doubles as the stack's sideways alignment.
   const blue2 = document.getElementById('boxBlue2');
   const reds2 = [...document.querySelectorAll('#stage2 .box.red')];
   const home2 = new Map();
   for (const el of [...reds2, blue2]) home2.set(el, { left: el.style.left, top: el.style.top });
+  const alignState = { h: null, v: null };
+  const alignAxis = (edge) => (edge === 'left' || edge === 'center-x' || edge === 'right' ? 'h' : 'v');
+  const arrangeCode = document.getElementById('arrangeCode');
+  const showCall = (s) => { arrangeCode.textContent = s; };
   document.querySelectorAll('[data-align]').forEach((btn) => {
-    btn.addEventListener('click', () => align(reds2, btn.dataset.align, { to: blue2 }));
+    btn.addEventListener('click', () => {
+      const edge = btn.dataset.align;
+      const axis = alignAxis(edge);
+      alignState[axis] = edge;
+      document.querySelectorAll('[data-align]').forEach((b) => {
+        if (alignAxis(b.dataset.align) === axis) b.classList.toggle('on', b === btn);
+      });
+      align(reds2, edge, { to: blue2 });
+      showCall(`align(reds, '${edge}', { to: blue })`);
+    });
   });
-  document.querySelector('[data-dist="x"]').addEventListener('click', () => distribute(reds2, 'x', { gap: 16 }));
-  document.querySelector('[data-dist="y"]').addEventListener('click', () => distribute(reds2, 'y', { gap: 16 }));
-  // Stack the reds from the blue box.
-  let stackDir = 'b';
+  document.querySelector('[data-dist="x"]').addEventListener('click', () => {
+    distribute(reds2, 'x', { gap: 16 });
+    showCall(`distribute(reds, 'x', { gap: 16 })`);
+  });
+  document.querySelector('[data-dist="y"]').addEventListener('click', () => {
+    distribute(reds2, 'y', { gap: 16 });
+    showCall(`distribute(reds, 'y', { gap: 16 })`);
+  });
+  // Stack the reds from the blue box, immediately on direction click. The
+  // sideways alignment comes from the highlighted align button on the
+  // perpendicular axis (centered when none is highlighted).
+  const lateralFor = (dir) => {
+    const vertical = dir === 't' || dir === 'b';
+    const edge = vertical ? alignState.h : alignState.v;
+    if (vertical) return edge === 'left' ? 'l' : edge === 'right' ? 'r' : 'c';
+    return edge === 'top' ? 't' : edge === 'bottom' ? 'b' : 'c';
+  };
   document.querySelectorAll('[data-stack-dir]').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('[data-stack-dir]').forEach((b) => { b.classList.toggle('on', b === btn); });
-      stackDir = btn.dataset.stackDir;
+      const dir = btn.dataset.stackDir;
+      if (dir === 'none') return;
+      const gap = Math.max(0, parseFloat(document.getElementById('stackGap').value) || 0);
+      const lateral = lateralFor(dir);
+      stack(reds2, { to: blue2, direction: dir, gap, align: lateral });
+      showCall(`stack(reds, { to: blue, direction: '${dir}', gap: ${gap}, align: '${lateral}' })`);
     });
-  });
-  document.getElementById('stackBtn').addEventListener('click', () => {
-    const gap = Math.max(0, parseFloat(document.getElementById('stackGap').value) || 0);
-    const sel = document.getElementById('stackAlign').value; // start | c | end
-    const vertical = stackDir === 't' || stackDir === 'b';
-    const alignCode = sel === 'c' ? 'c' : vertical ? (sel === 'start' ? 'l' : 'r') : (sel === 'start' ? 't' : 'b');
-    stack(reds2, { to: blue2, direction: stackDir, gap, align: alignCode });
   });
   document.getElementById('reset2').addEventListener('click', () => {
     for (const [el, home] of home2) {
@@ -325,6 +348,9 @@
       el.style.left = home.left;
       el.style.top = home.top;
     }
+    alignState.h = alignState.v = null;
+    document.querySelectorAll('[data-align].on').forEach((b) => { b.classList.remove('on'); });
+    document.querySelectorAll('[data-stack-dir]').forEach((b) => { b.classList.toggle('on', b.dataset.stackDir === 'none'); });
   });
 
   // SVG demo.
