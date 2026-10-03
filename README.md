@@ -39,10 +39,11 @@ import { place } from '@samirdamle/calipers/place';
 | `@samirdamle/calipers/rect` | `rectOf` — resolve anything measurable into a rect, with an explicit box model and coordinate space | 863 B |
 | `@samirdamle/calipers/measure` | `measure` / `calipers` — pairwise geometry, plus a DOM-free pure core | 1723 B |
 | `@samirdamle/calipers/place` | `place` — position an element relative to a point or another element | 1444 B |
+| `@samirdamle/calipers/align` | `align` / `distribute` — design-tool alignment and even spacing | 1434 B |
 
 Sizes are measured from the actual build (see `size-budgets.json`); a stale figure is a bug.
 
-`align` / `distribute`, `fit`, and the dev-only `debug` overlay are on the roadmap (plan §9–§10).
+`fit` and the dev-only `debug` overlay are on the roadmap (plan §9–§10).
 
 ## Anchors
 
