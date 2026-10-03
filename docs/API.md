@@ -145,13 +145,14 @@ interface PlaceAt {
 - `using: 'transform'` sets the CSS `translate` property — compositor-friendly, composes with `transform`, accumulates across calls.
 - `using: 'position'` sets `left`/`top` in the `offsetParent` frame (viewport frame for `fixed`); upgrades `static` → `absolute`; accounts for the offsetParent padding-box origin and margins. Exact for absolute/fixed positioning. Note: positions the border box — an existing `translate` still applies on top.
 
-## `align` / `distribute` — `@samirdamle/calipers/align`
+## `align` / `distribute` / `stack` — `@samirdamle/calipers/align`
 
-Design-tool verbs, built on `rectOf` plus the CSS `translate` property — compositor-friendly, accumulates across calls, moves a single axis only.
+Design-tool verbs, built on `rectOf` plus the CSS `translate` property — compositor-friendly, accumulates across calls, moves a single axis only (`stack` moves both, one axis at a time).
 
 ```ts
 align(els: ArrayLike<Element>, edge: AlignEdge, options?: AlignOptions): void
 distribute(els: ArrayLike<Element>, axis: 'x' | 'y', options?: DistributeOptions): void
+stack(els: ArrayLike<Element>, options?: StackOptions): void
 
 type AlignEdge = 'left' | 'right' | 'top' | 'bottom' | 'center-x' | 'center-y';
 
@@ -164,10 +165,22 @@ interface DistributeOptions {
   gap?: number;     // fixed gap in px; omit → even spacing across the selection span
   box?: Box;        // default 'border'
 }
+
+type StackDirection = 't' | 'b' | 'l' | 'r';
+type StackAlign = 't' | 'b' | 'l' | 'r' | 'c';
+
+interface StackOptions {
+  to?: Measurable;      // reference to stack from; omit → the selection's trailing extreme in the stacking direction
+  direction?: StackDirection; // which way the stack grows; default 'b'
+  gap?: number;         // px between consecutive boxes; default 0
+  align?: StackAlign;    // lateral alignment vs the anchor box; default 'c' (only the perpendicular axis applies)
+  box?: Box;            // default 'border'
+}
 ```
 
 - Without `to`, `align` matches design tools: edges snap to the selection's extreme, centers to its mean.
 - `distribute` processes elements in positional order and is a no-op for fewer than two elements.
+- `stack` piles elements one after another from the anchor's leading edge: `stack(targets, { to: source, direction: 't', gap: 10, align: 'c' })` stacks them upward from the source, 10px apart, center-aligned. Targets are ordered nearest-the-anchor first; the anchor itself never moves. Repeating the same call is a no-op.
 - Elements that don't need to move are left untouched.
 
 ## Shared types
@@ -188,7 +201,7 @@ Per-module budgets (min+br), enforced in CI by `scripts/check-size.mjs`:
 | `rect.js` | 1024 B |
 | `measure.js` | 2048 B |
 | `place.js` | 1792 B |
-| `align.js` | 1792 B |
-| `index.js` (barrel) | 3072 B |
+| `align.js` | 2048 B |
+| `index.js` (barrel) | 3584 B |
 
-Current measured sizes: rect 863 B, measure 1723 B, place 1444 B, align 1434 B, index 2691 B.
+Current measured sizes: rect 863 B, measure 1723 B, place 1444 B, align 1890 B, index 3123 B.

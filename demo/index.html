@@ -16,6 +16,8 @@
   select, button { background: #23232c; color: #e8e8ee; border: 1px solid #3a3a46; border-radius: 6px; padding: 6px 10px; font-size: 13px; }
   button { cursor: pointer; }
   button:hover { border-color: #f0dd82; }
+  button.on { border-color: #f0dd82; color: #f0dd82; }
+  input[type="number"] { background: #23232c; color: #e8e8ee; border: 1px solid #3a3a46; border-radius: 6px; padding: 6px 8px; font-size: 13px; width: 56px; }
   #stage, #stage2 { position: relative; background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; overflow: hidden; touch-action: none; }
   #stage { height: 340px; }
   #stage2 { height: 260px; }
@@ -80,6 +82,20 @@
     <button type="button" data-dist="y">distribute y</button>
     <button type="button" id="reset2">reset</button>
   </div>
+  <div class="controls">
+    <span>stack</span>
+    <button type="button" data-stack-dir="t">up</button>
+    <button type="button" data-stack-dir="b" class="on">down</button>
+    <button type="button" data-stack-dir="l">left</button>
+    <button type="button" data-stack-dir="r">right</button>
+    <label>gap <input type="number" id="stackGap" value="10" min="0" step="1" /></label>
+    <select id="stackAlign">
+      <option value="start">left/top</option>
+      <option value="c" selected>center</option>
+      <option value="end">right/bottom</option>
+    </select>
+    <button type="button" id="stackBtn">stack from blue</button>
+  </div>
   <div id="stage2">
     <div class="box red" style="width:110px;height:60px;left:40px;top:40px">1</div>
     <div class="box red" style="width:80px;height:80px;left:200px;top:140px">2</div>
@@ -96,7 +112,7 @@
   <pre id="svgReadout"></pre>
 
 <script type="module">
-  import { align, distribute } from '../dist/align.js';
+  import { align, distribute, stack } from '../dist/align.js';
   import { anchorPoint, measure } from '../dist/measure.js';
   import { place } from '../dist/place.js';
   import { rectOf } from '../dist/rect.js';
@@ -296,6 +312,21 @@
   });
   document.querySelector('[data-dist="x"]').addEventListener('click', () => distribute(reds2, 'x', { gap: 16 }));
   document.querySelector('[data-dist="y"]').addEventListener('click', () => distribute(reds2, 'y', { gap: 16 }));
+  // Stack the reds from the blue box.
+  let stackDir = 'b';
+  document.querySelectorAll('[data-stack-dir]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-stack-dir]').forEach((b) => { b.classList.toggle('on', b === btn); });
+      stackDir = btn.dataset.stackDir;
+    });
+  });
+  document.getElementById('stackBtn').addEventListener('click', () => {
+    const gap = Math.max(0, parseFloat(document.getElementById('stackGap').value) || 0);
+    const sel = document.getElementById('stackAlign').value; // start | c | end
+    const vertical = stackDir === 't' || stackDir === 'b';
+    const alignCode = sel === 'c' ? 'c' : vertical ? (sel === 'start' ? 'l' : 'r') : (sel === 'start' ? 't' : 'b');
+    stack(reds2, { to: blue2, direction: stackDir, gap, align: alignCode });
+  });
   document.getElementById('reset2').addEventListener('click', () => {
     for (const [el, home] of home2) {
       el.style.removeProperty('translate');
