@@ -31,7 +31,8 @@ export interface DistributeOptions {
 /**
  * Align elements along one edge or centerline, moving each via the CSS
  * `translate` property (accumulates across calls, composes with `transform`).
- * Reads layout once per call.
+ * Measurement includes each element's existing translate, so repeating the
+ * same call is a no-op instead of re-applying the delta.
  */
 export function align(
 	els: ArrayLike<Element>,
@@ -41,11 +42,13 @@ export function align(
 	const list = Array.from(els) as HTMLElement[];
 	if (list.length === 0) return;
 	const box = options.box ?? 'border';
-	const rects = list.map((el) => rectOf(el, { box, space: 'viewport' }));
+	const rects = list.map((el) => renderedRect(el, box));
 	const ref =
 		options.to === undefined
 			? null
-			: rectOf(options.to, { box, space: 'viewport' });
+			: options.to instanceof Element
+				? renderedRect(options.to, box)
+				: rectOf(options.to, { box, space: 'viewport' });
 
 	const horizontal = edge === 'left' || edge === 'right' || edge === 'center-x';
 	const line = horizontal ? xLine(edge, rects, ref) : yLine(edge, rects, ref);
@@ -67,6 +70,8 @@ export function align(
 /**
  * Spread elements evenly along an axis, in positional order, moving each via
  * the CSS `translate` property. No-op for fewer than two elements.
+ * Measurement includes each element's existing translate, so repeating the
+ * same call is a no-op instead of re-applying the deltas.
  */
 export function distribute(
 	els: ArrayLike<Element>,
@@ -79,7 +84,7 @@ export function distribute(
 	const horizontal = axis === 'x';
 
 	const items = list
-		.map((el) => ({ el, rect: rectOf(el, { box, space: 'viewport' }) }))
+		.map((el) => ({ el, rect: renderedRect(el, box) }))
 		.sort((a, b) => (horizontal ? a.rect.x - b.rect.x : a.rect.y - b.rect.y));
 
 	const start = (r: Rect) => (horizontal ? r.x : r.y);
@@ -141,6 +146,20 @@ function yLine(edge: AlignEdge, rects: Rect[], ref: Rect | null): number {
 
 function mean(vals: number[]): number {
 	return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+/**
+ * The rect as currently rendered: the chosen box plus the element's own CSS
+ * `translate` (set by place/align/distribute in transform mode). The offset
+ * chain behind `rectOf` doesn't include `translate`, so measuring without it
+ * would compute the delta from the stale layout position and re-apply it on
+ * every call. `visual` already includes it — never double-count.
+ */
+function renderedRect(el: Element, box: Box): Rect {
+	const r = rectOf(el, { box, space: 'viewport' });
+	if (box === 'visual') return r;
+	const t = parseTranslate(getComputedStyle(el).translate);
+	return t.x === 0 && t.y === 0 ? r : { ...r, x: r.x + t.x, y: r.y + t.y };
 }
 
 /** Parse a CSS length; non-numeric values count as 0. */
