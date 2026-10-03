@@ -19,7 +19,7 @@
   #stage, #stage2 { position: relative; background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; overflow: hidden; touch-action: none; }
   #stage { height: 340px; }
   #stage2 { height: 260px; }
-  .box { position: absolute; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; border-radius: 8px; cursor: grab; user-select: none; }
+  .box { position: absolute; display: flex; align-items: flex-start; justify-content: center; font-weight: 700; font-size: 20px; border-radius: 8px; cursor: grab; user-select: none; box-sizing: border-box; padding-top: 6px; }
   .box.a { width: 120px; height: 90px; left: 60px; top: 60px; background: #3b5bd6; }
   .box.b { width: 150px; height: 70px; left: 320px; top: 180px; background: #b0433a; }
   .box.red { background: #b0433a; }
@@ -120,9 +120,29 @@
   const fmt = (n) => (typeof n === 'number' ? Math.round(n * 10) / 10 : n);
   const fmtObj = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, fmt(v)]));
 
-  /** Border-box rect of an element, in #stage pixel coordinates. */
-  function stageRectOf(el, box) {
-    const r = rectOf(el, { box, space: spaceSel.value });
+  /** Parse a computed CSS `translate` value into px. */
+  function parseTranslate(value) {
+    if (!value || value === 'none') return { x: 0, y: 0 };
+    const [x = '0', y = '0'] = value.trim().split(/\s+/);
+    const px = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    return { x: px(x), y: px(y) };
+  }
+
+  /**
+   * The box as drawn: rectOf plus the element's CSS `translate` (set by
+   * place/align in transform mode). The offset chain doesn't include
+   * translate, so without this the overlays lag behind a moved box.
+   * 'visual' already includes it — don't double-count.
+   */
+  function placedRectOf(el) {
+    const r = rectOf(el, { box: boxSel.value, space: spaceSel.value });
+    if (boxSel.value === 'visual') return r;
+    const t = parseTranslate(getComputedStyle(el).translate);
+    return { ...r, x: r.x + t.x, y: r.y + t.y };
+  }
+
+  /** Selected-space rect → #stage pixel coordinates. */
+  function toStage(r) {
     const sr = stage.getBoundingClientRect();
     const sx = spaceSel.value === 'document' ? window.scrollX : 0;
     const sy = spaceSel.value === 'document' ? window.scrollY : 0;
@@ -164,18 +184,16 @@
 
   function update() {
     document.querySelectorAll('.anchor-dot').forEach((d) => { d.remove(); });
-    const r = measure(boxA, boxB, {
+    const rA = placedRectOf(boxA);
+    const rB = placedRectOf(boxB);
+    // measure() accepts rects — box/space are baked into rA/rB already.
+    const r = measure(rA, rB, {
       anchor: anchorA.value,
       ofAnchor: anchorB.value,
-      box: boxSel.value,
-      space: spaceSel.value,
       fields: ['dx', 'dy', 'distance', 'gapX', 'gapY', 'angleDeg', 'width', 'height', 'overlaps'],
     });
-    const sr = stage.getBoundingClientRect();
-    const sx = spaceSel.value === 'document' ? window.scrollX : 0;
-    const sy = spaceSel.value === 'document' ? window.scrollY : 0;
-    const toStage = (p) => ({ x: p.x - sx - sr.left, y: p.y - sy - sr.top });
     const pA = toStage(r.pointA), pB = toStage(r.pointB);
+    const rAs = toStage(rA), rBs = toStage(rB);
 
     // Active anchor points (yellow).
     for (const p of [pA, pB]) {
@@ -188,15 +206,16 @@
 
     // Cue dots follow their boxes.
     for (const { d, el, sel, code } of cues) {
-      const p = anchorPoint(stageRectOf(el, 'border'), code);
+      const p = anchorPoint(toStage(placedRectOf(el)), code);
       d.style.left = `${p.x}px`;
       d.style.top = `${p.y}px`;
       d.classList.toggle('sel', sel.value === code);
     }
 
-    // Architectural dimension lines between the anchor points.
+    // Architectural dimension lines between the anchor points,
+    // offset 20px outside the blocks (top edge for dx, left edge for dy).
     if (dimsOn.checked && Math.abs(pB.x - pA.x) >= 0.5) {
-      const y = Math.min(pA.y, pB.y) - 28;
+      const y = Math.min(rAs.y, rBs.y) - 20;
       setLine(dxLine, pA.x, y, pB.x, y);
       setLine(dxT1, pA.x, y - 4, pA.x, y + 4);
       setLine(dxT2, pB.x, y - 4, pB.x, y + 4);
@@ -208,7 +227,7 @@
       show(dxEls, false);
     }
     if (dimsOn.checked && Math.abs(pB.y - pA.y) >= 0.5) {
-      const x = Math.min(pA.x, pB.x) - 28;
+      const x = Math.min(rAs.x, rBs.x) - 20;
       setLine(dyLine, x, pA.y, x, pB.y);
       setLine(dyT1, x - 4, pA.y, x + 4, pA.y);
       setLine(dyT2, x - 4, pB.y, x + 4, pB.y);
