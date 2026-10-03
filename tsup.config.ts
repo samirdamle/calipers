@@ -15,4 +15,7 @@ export default defineConfig({
 	sourcemap: true,
 	clean: true,
 	treeshake: true,
+	// Each entry is self-contained: importing one module never pulls a shared
+	// chunk, so per-module size budgets stay honest.
+	splitting: false,
 });
