@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Calipers playground</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: ui-sans-serif, system-ui, sans-serif; background: #141419; color: #e8e8ee; margin: 0; padding: 24px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 8px; color: #f0dd82; }
+  p.hint { color: #9a9aa5; font-size: 13px; margin: 0 0 16px; }
+  code { background: #23232c; padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+  label { display: flex; gap: 6px; align-items: center; color: #b9b9c4; }
+  select, button { background: #23232c; color: #e8e8ee; border: 1px solid #3a3a46; border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+  button { cursor: pointer; }
+  button:hover { border-color: #f0dd82; }
+  #stage { position: relative; height: 340px; background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; overflow: hidden; touch-action: none; }
+  .box { position: absolute; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; border-radius: 8px; cursor: grab; user-select: none; }
+  .box.a { width: 120px; height: 90px; left: 60px; top: 60px; background: #3b5bd6; }
+  .box.b { width: 150px; height: 70px; left: 320px; top: 180px; background: #b0433a; }
+  .box:active { cursor: grabbing; }
+  pre { background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; padding: 12px 16px; font-size: 12.5px; line-height: 1.6; overflow-x: auto; min-height: 120px; }
+  .anchor-dot { position: absolute; width: 8px; height: 8px; margin: -4px; border-radius: 50%; background: #f0dd82; pointer-events: none; z-index: 5; }
+  svg.demo { background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; }
+</style>
+</head>
+<body>
+  <h1>Calipers playground</h1>
+  <p class="hint">Run <code>pnpm build</code>, then <code>pnpm demo</code> and open this page. Drag the boxes.</p>
+
+  <h2>Measure — drag A and B</h2>
+  <div class="controls">
+    <label>A anchor <select id="anchorA"></select></label>
+    <label>B anchor <select id="anchorB"></select></label>
+    <label>box <select id="box"><option>border</option><option>content</option><option>margin</option><option>visual</option></select></label>
+    <label>space <select id="space"><option>viewport</option><option>document</option></select></label>
+  </div>
+  <div id="stage">
+    <div id="boxA" class="box a">A</div>
+    <div id="boxB" class="box b">B</div>
+  </div>
+  <pre id="readout"></pre>
+
+  <h2>Place — put A relative to B</h2>
+  <div class="controls">
+    <button type="button" data-place="above">above</button>
+    <button type="button" data-place="below">below</button>
+    <button type="button" data-place="left">left</button>
+    <button type="button" data-place="right">right</button>
+    <button type="button" data-place="center">center on</button>
+    <label><input type="checkbox" id="usePosition" /> use left/top instead of translate</label>
+    <button type="button" id="reset">reset A</button>
+  </div>
+
+  <h2>SVG — bbox (local units) vs screen rect</h2>
+  <svg class="demo" id="svg" viewBox="0 0 200 100" width="420" height="210" role="img" aria-label="Rotated rectangle demo">
+    <title>Rotated rectangle</title>
+    <rect id="svgRect" x="50" y="20" width="60" height="40" transform="rotate(20 80 40)" fill="#3b5bd6" rx="4" />
+  </svg>
+  <pre id="svgReadout"></pre>
+
+<script type="module">
+  import { measure } from '../dist/measure.js';
+  import { place } from '../dist/place.js';
+  import { rectOf } from '../dist/rect.js';
+
+  const CODES = ['tl','tc','tr','cl','cc','cr','bl','bc','br','t','b','l','r'];
+  const anchorA = document.getElementById('anchorA');
+  const anchorB = document.getElementById('anchorB');
+  for (const c of CODES) {
+    anchorA.add(new Option(c, c, c === 'cc', c === 'cc'));
+    anchorB.add(new Option(c, c, c === 'cc', c === 'cc'));
+  }
+  const boxSel = document.getElementById('box');
+  const spaceSel = document.getElementById('space');
+  const boxA = document.getElementById('boxA');
+  const boxB = document.getElementById('boxB');
+  const stage = document.getElementById('stage');
+  const readout = document.getElementById('readout');
+
+  const fmt = (n) => (typeof n === 'number' ? Math.round(n * 10) / 10 : n);
+  const fmtObj = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, fmt(v)]));
+
+  function update() {
+    document.querySelectorAll('.anchor-dot').forEach((d) => {
+      d.remove();
+    });
+    const r = measure(boxA, boxB, {
+      anchor: anchorA.value,
+      ofAnchor: anchorB.value,
+      box: boxSel.value,
+      space: spaceSel.value,
+      fields: ['dx', 'dy', 'distance', 'gapX', 'gapY', 'angleDeg', 'width', 'height', 'overlaps'],
+    });
+    // Draw the resolved anchor points in stage coordinates.
+    const stageRect = stage.getBoundingClientRect();
+    const sx = spaceSel.value === 'document' ? window.scrollX : 0;
+    const sy = spaceSel.value === 'document' ? window.scrollY : 0;
+    for (const p of [r.pointA, r.pointB]) {
+      const d = document.createElement('div');
+      d.className = 'anchor-dot';
+      d.style.left = `${p.x - sx - stageRect.left}px`;
+      d.style.top = `${p.y - sy - stageRect.top}px`;
+      stage.appendChild(d);
+    }
+    readout.textContent =
+      `pointA ${JSON.stringify(fmtObj(r.pointA))}   pointB ${JSON.stringify(fmtObj(r.pointB))}\n` +
+      `dx ${fmt(r.dx)}   dy ${fmt(r.dy)}   distance ${fmt(r.distance)}\n` +
+      `gapX ${fmt(r.gapX)}   gapY ${fmt(r.gapY)}   angle ${fmt(r.angleDeg)}°\n` +
+      `A ${fmt(r.width)}×${fmt(r.height)}   overlaps ${r.overlaps}`;
+  }
+
+  // Dragging: left/top move the border box; translate (from place) stays put.
+  let drag = null;
+  for (const el of [boxA, boxB]) {
+    el.addEventListener('pointerdown', (e) => {
+      drag = { el, x: e.clientX, y: e.clientY, left: el.offsetLeft, top: el.offsetTop };
+      el.setPointerCapture(e.pointerId);
+    });
+  }
+  window.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    drag.el.style.left = `${drag.left + e.clientX - drag.x}px`;
+    drag.el.style.top = `${drag.top + e.clientY - drag.y}px`;
+    update();
+  });
+  window.addEventListener('pointerup', () => (drag = null));
+  for (const sel of [anchorA, anchorB, boxSel, spaceSel]) sel.addEventListener('change', update);
+
+  // Place demos.
+  const placements = {
+    above:  { anchor: 'bc', at: { anchor: 'tc', of: boxB }, offset: { y: -8 } },
+    below:  { anchor: 'tc', at: { anchor: 'bc', of: boxB }, offset: { y: 8 } },
+    left:   { anchor: 'cr', at: { anchor: 'cl', of: boxB }, offset: { x: -8 } },
+    right:  { anchor: 'cl', at: { anchor: 'cr', of: boxB }, offset: { x: 8 } },
+    center: { anchor: 'cc', at: { anchor: 'cc', of: boxB } },
+  };
+  document.querySelectorAll('[data-place]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const using = document.getElementById('usePosition').checked ? 'position' : 'transform';
+      place(boxA, { ...placements[btn.dataset.place], using });
+      update();
+    });
+  });
+  document.getElementById('reset').addEventListener('click', () => {
+    boxA.style.translate = '';
+    boxA.style.left = '60px';
+    boxA.style.top = '60px';
+    update();
+  });
+
+  // SVG demo.
+  const svgRect = document.getElementById('svgRect');
+  document.getElementById('svgReadout').textContent =
+    `bbox (local SVG units):  ${JSON.stringify(rectOf(svgRect, { box: 'bbox' }))}\n` +
+    `screen rect (visual):     ${JSON.stringify(fmtObj(rectOf(svgRect, { box: 'visual' })))}`;
+
+  update();
+</script>
+</body>
+</html>
