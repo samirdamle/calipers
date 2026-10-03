@@ -16,13 +16,23 @@
   select, button { background: #23232c; color: #e8e8ee; border: 1px solid #3a3a46; border-radius: 6px; padding: 6px 10px; font-size: 13px; }
   button { cursor: pointer; }
   button:hover { border-color: #f0dd82; }
-  #stage { position: relative; height: 340px; background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; overflow: hidden; touch-action: none; }
+  #stage, #stage2 { position: relative; background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; overflow: hidden; touch-action: none; }
+  #stage { height: 340px; }
+  #stage2 { height: 260px; }
   .box { position: absolute; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; border-radius: 8px; cursor: grab; user-select: none; }
   .box.a { width: 120px; height: 90px; left: 60px; top: 60px; background: #3b5bd6; }
   .box.b { width: 150px; height: 70px; left: 320px; top: 180px; background: #b0433a; }
+  .box.red { background: #b0433a; }
+  .box.blue { background: #3b5bd6; }
   .box:active { cursor: grabbing; }
   pre { background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; padding: 12px 16px; font-size: 12.5px; line-height: 1.6; overflow-x: auto; min-height: 120px; }
   .anchor-dot { position: absolute; width: 8px; height: 8px; margin: -4px; border-radius: 50%; background: #f0dd82; pointer-events: none; z-index: 5; }
+  .anchor-cue { position: absolute; width: 10px; height: 10px; margin: -5px; border-radius: 50%; border: 1px solid rgba(240,221,130,.4); cursor: pointer; z-index: 6; }
+  .anchor-cue:hover { background: rgba(240,221,130,.55); }
+  .anchor-cue.sel { background: #f0dd82; border-color: #f0dd82; }
+  #dims { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
+  #dims line { stroke: #8ab4ff; stroke-width: 1; }
+  #dims text { fill: #8ab4ff; font: 11px ui-monospace, monospace; }
   svg.demo { background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; }
 </style>
 </head>
@@ -31,15 +41,18 @@
   <p class="hint">Run <code>pnpm build</code>, then <code>pnpm demo</code> and open this page. Drag the boxes.</p>
 
   <h2>Measure — drag A and B</h2>
+  <p class="hint">Click any faint dot on a box to set that box's anchor directly.</p>
   <div class="controls">
     <label>A anchor <select id="anchorA"></select></label>
     <label>B anchor <select id="anchorB"></select></label>
     <label>box <select id="box"><option>border</option><option>content</option><option>margin</option><option>visual</option></select></label>
     <label>space <select id="space"><option>viewport</option><option>document</option></select></label>
+    <label><input type="checkbox" id="dimsOn" checked /> dimensions</label>
   </div>
   <div id="stage">
     <div id="boxA" class="box a">A</div>
     <div id="boxB" class="box b">B</div>
+    <svg id="dims" aria-hidden="true"></svg>
   </div>
   <pre id="readout"></pre>
 
@@ -54,6 +67,27 @@
     <button type="button" id="reset">reset A</button>
   </div>
 
+  <h2>Align — many objects</h2>
+  <p class="hint">Drag the boxes, then align the reds to the blue box in one go — or distribute them.</p>
+  <div class="controls">
+    <button type="button" data-align="left">left</button>
+    <button type="button" data-align="center-x">center-x</button>
+    <button type="button" data-align="right">right</button>
+    <button type="button" data-align="top">top</button>
+    <button type="button" data-align="center-y">center-y</button>
+    <button type="button" data-align="bottom">bottom</button>
+    <button type="button" data-dist="x">distribute x</button>
+    <button type="button" data-dist="y">distribute y</button>
+    <button type="button" id="reset2">reset</button>
+  </div>
+  <div id="stage2">
+    <div class="box red" style="width:110px;height:60px;left:40px;top:40px">1</div>
+    <div class="box red" style="width:80px;height:80px;left:200px;top:140px">2</div>
+    <div class="box red" style="width:130px;height:50px;left:420px;top:60px">3</div>
+    <div class="box red" style="width:70px;height:70px;left:120px;top:180px">4</div>
+    <div id="boxBlue2" class="box blue" style="width:90px;height:90px;left:330px;top:90px">B</div>
+  </div>
+
   <h2>SVG — bbox (local units) vs screen rect</h2>
   <svg class="demo" id="svg" viewBox="0 0 200 100" width="420" height="210" role="img" aria-label="Rotated rectangle demo">
     <title>Rotated rectangle</title>
@@ -62,7 +96,8 @@
   <pre id="svgReadout"></pre>
 
 <script type="module">
-  import { measure } from '../dist/measure.js';
+  import { align, distribute } from '../dist/align.js';
+  import { anchorPoint, measure } from '../dist/measure.js';
   import { place } from '../dist/place.js';
   import { rectOf } from '../dist/rect.js';
 
@@ -75,18 +110,60 @@
   }
   const boxSel = document.getElementById('box');
   const spaceSel = document.getElementById('space');
+  const dimsOn = document.getElementById('dimsOn');
   const boxA = document.getElementById('boxA');
   const boxB = document.getElementById('boxB');
   const stage = document.getElementById('stage');
+  const dims = document.getElementById('dims');
   const readout = document.getElementById('readout');
 
   const fmt = (n) => (typeof n === 'number' ? Math.round(n * 10) / 10 : n);
   const fmtObj = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, fmt(v)]));
 
+  /** Border-box rect of an element, in #stage pixel coordinates. */
+  function stageRectOf(el, box) {
+    const r = rectOf(el, { box, space: spaceSel.value });
+    const sr = stage.getBoundingClientRect();
+    const sx = spaceSel.value === 'document' ? window.scrollX : 0;
+    const sy = spaceSel.value === 'document' ? window.scrollY : 0;
+    return { x: r.x - sx - sr.left, y: r.y - sy - sr.top, width: r.width, height: r.height };
+  }
+
+  // Anchor cue dots: faint, clickable, one per code per box. Built once, repositioned on update.
+  const cues = [];
+  for (const [el, sel] of [[boxA, anchorA], [boxB, anchorB]]) {
+    for (const code of CODES) {
+      const d = document.createElement('div');
+      d.className = 'anchor-cue';
+      d.title = code;
+      d.addEventListener('click', () => { sel.value = code; update(); });
+      stage.appendChild(d);
+      cues.push({ d, el, sel, code });
+    }
+  }
+
+  // Dimension-line elements: one dx set and one dy set, repositioned on update.
+  const NS = 'http://www.w3.org/2000/svg';
+  function svgEl(tag, attrs) {
+    const el = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    dims.appendChild(el);
+    return el;
+  }
+  const dxLine = svgEl('line', {}), dxT1 = svgEl('line', {}), dxT2 = svgEl('line', {});
+  const dxLabel = svgEl('text', { 'text-anchor': 'middle' });
+  const dyLine = svgEl('line', {}), dyT1 = svgEl('line', {}), dyT2 = svgEl('line', {});
+  const dyLabel = svgEl('text', { 'text-anchor': 'end', 'dominant-baseline': 'middle' });
+  const dxEls = [dxLine, dxT1, dxT2, dxLabel];
+  const dyEls = [dyLine, dyT1, dyT2, dyLabel];
+  const setLine = (el, x1, y1, x2, y2) => {
+    el.setAttribute('x1', x1); el.setAttribute('y1', y1);
+    el.setAttribute('x2', x2); el.setAttribute('y2', y2);
+  };
+  const show = (els, on) => { els.forEach((el) => { el.style.display = on ? '' : 'none'; }); };
+
   function update() {
-    document.querySelectorAll('.anchor-dot').forEach((d) => {
-      d.remove();
-    });
+    document.querySelectorAll('.anchor-dot').forEach((d) => { d.remove(); });
     const r = measure(boxA, boxB, {
       anchor: anchorA.value,
       ofAnchor: anchorB.value,
@@ -94,17 +171,55 @@
       space: spaceSel.value,
       fields: ['dx', 'dy', 'distance', 'gapX', 'gapY', 'angleDeg', 'width', 'height', 'overlaps'],
     });
-    // Draw the resolved anchor points in stage coordinates.
-    const stageRect = stage.getBoundingClientRect();
+    const sr = stage.getBoundingClientRect();
     const sx = spaceSel.value === 'document' ? window.scrollX : 0;
     const sy = spaceSel.value === 'document' ? window.scrollY : 0;
-    for (const p of [r.pointA, r.pointB]) {
+    const toStage = (p) => ({ x: p.x - sx - sr.left, y: p.y - sy - sr.top });
+    const pA = toStage(r.pointA), pB = toStage(r.pointB);
+
+    // Active anchor points (yellow).
+    for (const p of [pA, pB]) {
       const d = document.createElement('div');
       d.className = 'anchor-dot';
-      d.style.left = `${p.x - sx - stageRect.left}px`;
-      d.style.top = `${p.y - sy - stageRect.top}px`;
+      d.style.left = `${p.x}px`;
+      d.style.top = `${p.y}px`;
       stage.appendChild(d);
     }
+
+    // Cue dots follow their boxes.
+    for (const { d, el, sel, code } of cues) {
+      const p = anchorPoint(stageRectOf(el, 'border'), code);
+      d.style.left = `${p.x}px`;
+      d.style.top = `${p.y}px`;
+      d.classList.toggle('sel', sel.value === code);
+    }
+
+    // Architectural dimension lines between the anchor points.
+    if (dimsOn.checked && Math.abs(pB.x - pA.x) >= 0.5) {
+      const y = Math.min(pA.y, pB.y) - 28;
+      setLine(dxLine, pA.x, y, pB.x, y);
+      setLine(dxT1, pA.x, y - 4, pA.x, y + 4);
+      setLine(dxT2, pB.x, y - 4, pB.x, y + 4);
+      dxLabel.setAttribute('x', (pA.x + pB.x) / 2);
+      dxLabel.setAttribute('y', y - 6);
+      dxLabel.textContent = `dx ${fmt(pB.x - pA.x)}`;
+      show(dxEls, true);
+    } else {
+      show(dxEls, false);
+    }
+    if (dimsOn.checked && Math.abs(pB.y - pA.y) >= 0.5) {
+      const x = Math.min(pA.x, pB.x) - 28;
+      setLine(dyLine, x, pA.y, x, pB.y);
+      setLine(dyT1, x - 4, pA.y, x + 4, pA.y);
+      setLine(dyT2, x - 4, pB.y, x + 4, pB.y);
+      dyLabel.setAttribute('x', x - 8);
+      dyLabel.setAttribute('y', (pA.y + pB.y) / 2);
+      dyLabel.textContent = `dy ${fmt(pB.y - pA.y)}`;
+      show(dyEls, true);
+    } else {
+      show(dyEls, false);
+    }
+
     readout.textContent =
       `pointA ${JSON.stringify(fmtObj(r.pointA))}   pointB ${JSON.stringify(fmtObj(r.pointB))}\n` +
       `dx ${fmt(r.dx)}   dy ${fmt(r.dy)}   distance ${fmt(r.distance)}\n` +
@@ -114,7 +229,7 @@
 
   // Dragging: left/top move the border box; translate (from place) stays put.
   let drag = null;
-  for (const el of [boxA, boxB]) {
+  for (const el of document.querySelectorAll('.box')) {
     el.addEventListener('pointerdown', (e) => {
       drag = { el, x: e.clientX, y: e.clientY, left: el.offsetLeft, top: el.offsetTop };
       el.setPointerCapture(e.pointerId);
@@ -124,10 +239,11 @@
     if (!drag) return;
     drag.el.style.left = `${drag.left + e.clientX - drag.x}px`;
     drag.el.style.top = `${drag.top + e.clientY - drag.y}px`;
-    update();
+    if (drag.el.closest('#stage')) update();
   });
   window.addEventListener('pointerup', () => (drag = null));
   for (const sel of [anchorA, anchorB, boxSel, spaceSel]) sel.addEventListener('change', update);
+  dimsOn.addEventListener('change', update);
 
   // Place demos.
   const placements = {
@@ -145,10 +261,28 @@
     });
   });
   document.getElementById('reset').addEventListener('click', () => {
-    boxA.style.translate = '';
+    boxA.style.removeProperty('translate');
     boxA.style.left = '60px';
     boxA.style.top = '60px';
     update();
+  });
+
+  // Align demos: reds to the blue box, or distribute the reds.
+  const blue2 = document.getElementById('boxBlue2');
+  const reds2 = [...document.querySelectorAll('#stage2 .box.red')];
+  const home2 = new Map();
+  for (const el of [...reds2, blue2]) home2.set(el, { left: el.style.left, top: el.style.top });
+  document.querySelectorAll('[data-align]').forEach((btn) => {
+    btn.addEventListener('click', () => align(reds2, btn.dataset.align, { to: blue2 }));
+  });
+  document.querySelector('[data-dist="x"]').addEventListener('click', () => distribute(reds2, 'x', { gap: 16 }));
+  document.querySelector('[data-dist="y"]').addEventListener('click', () => distribute(reds2, 'y', { gap: 16 }));
+  document.getElementById('reset2').addEventListener('click', () => {
+    for (const [el, home] of home2) {
+      el.style.removeProperty('translate');
+      el.style.left = home.left;
+      el.style.top = home.top;
+    }
   });
 
   // SVG demo.
