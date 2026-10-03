@@ -34,7 +34,7 @@ export type Space = 'viewport' | 'document';
 export type Measurable =
 	| string
 	| Element
-	| ArrayLike<Element | string>
+	| ArrayLike<Element | string | Rect>
 	| Window
 	| 'viewport'
 	| Rect;

@@ -55,7 +55,7 @@ function classify(target: Measurable): Target {
 	}
 	if (isElement(target)) return { kind: 'element', el: target };
 	if (isRectLike(target)) return { kind: 'rect', rect: target };
-	const first = (target as ArrayLike<Element | string>)[0];
+	const first = (target as ArrayLike<Element | string | Rect>)[0];
 	if (first == null)
 		throw new Error('calipers: empty list has no measurable to resolve');
 	return classify(first);
