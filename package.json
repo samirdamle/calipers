@@ -42,6 +42,9 @@
 	"main": "./dist/index.js",
 	"name": "@samirdamle/calipers",
 	"packageManager": "pnpm@12.8.1",
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
 		"attw": "attw --pack --profile esm-only",
 		"build": "tsup",
@@ -49,6 +52,7 @@
 		"demo": "pnpm build && node scripts/serve.mjs .",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
+		"prepublishOnly": "pnpm build",
 		"size": "node scripts/check-size.mjs",
 		"test": "vitest run",
 		"typecheck": "tsc --noEmit"
