@@ -285,4 +285,55 @@ describe('place gap', () => {
 		expect(translateOf(el)).toBe('175px 210px');
 		vi.restoreAllMocks();
 	});
+
+	it('is exact on fractional layouts: target measured in visual space', () => {
+		// True fractional layout (e.g. after a pointer drag with fractional
+		// clientX/Y); offset* round to integers like real browsers, while
+		// getBoundingClientRect() stays fractional.
+		const boxB = document.createElement('div');
+		const el = document.createElement('div');
+		for (const [target, t] of [
+			[boxB, { x: 320.49, y: 180.49, w: 150, h: 70 }],
+			[el, { x: 60.49, y: 60.49, w: 120, h: 90 }],
+		] as const) {
+			for (const [k, v] of Object.entries({
+				offsetLeft: Math.round(t.x),
+				offsetTop: Math.round(t.y),
+				offsetWidth: Math.round(t.w),
+				offsetHeight: Math.round(t.h),
+				offsetParent: null,
+			})) {
+				Object.defineProperty(target, k, { value: v, configurable: true });
+			}
+			// getBoundingClientRect stays fractional and reflects the live translate.
+			vi.spyOn(target, 'getBoundingClientRect').mockImplementation(() => {
+				const tr = target.style.getPropertyValue('translate').split(' ');
+				return fakeDOMRect(
+					t.x + (parseFloat(tr[0]) || 0),
+					t.y + (parseFloat(tr[1]) || 0),
+					t.w,
+					t.h,
+				);
+			});
+		}
+		vi.spyOn(window, 'getComputedStyle').mockImplementation(
+			(target: Element) =>
+				({
+					position: 'static',
+					translate:
+						(target as HTMLElement).style.getPropertyValue('translate') ||
+						'none',
+				}) as unknown as CSSStyleDeclaration,
+		);
+		place(el, {
+			anchor: 'br',
+			at: { anchor: 'tl', of: boxB },
+			gap: { x: 50, y: 20 },
+		});
+		// The on-screen anchor must land exactly on target + gap.
+		const v = el.getBoundingClientRect();
+		expect(v.right).toBeCloseTo(320.49 - 50, 10);
+		expect(v.bottom).toBeCloseTo(180.49 - 20, 10);
+		vi.restoreAllMocks();
+	});
 });
