@@ -150,8 +150,8 @@ interface PlaceAt {
 ```
 
 - `at` as a raw `{ x, y }` point is interpreted in **viewport** coordinates (e.g. mouse `clientX/Y`).
-- `using: 'transform'` sets the CSS `translate` property — compositor-friendly, composes with `transform`, accumulates across calls.
-- `using: 'position'` sets `left`/`top` in the `offsetParent` frame (viewport frame for `fixed`); upgrades `static` → `absolute`; accounts for the offsetParent padding-box origin and margins. Exact for absolute/fixed positioning. Note: positions the border box — an existing `translate` still applies on top.
+- `using: 'transform'` sets the CSS `translate` property — compositor-friendly, composes with `transform`, accumulates across calls. The target anchor is measured in **visual** (on-screen) space, so placement stays exact even on fractional layouts.
+- `using: 'position'` sets `left`/`top` in the `offsetParent` frame (viewport frame for `fixed`); upgrades `static` → `absolute`; accounts for the offsetParent padding-box origin and margins. The target is measured in layout (border-box) space, matching the `left`/`top` frame. Exact for absolute/fixed positioning. Note: positions the border box — an existing `translate` still applies on top.
 - `gap` pushes the box *away* from the target along the ray from the anchor through the box center — `place(tip, { anchor: 'tc', at: { anchor: 'bc', of: btn }, gap: 8 })` puts the tooltip 8px below the button. Unlike `offset` (a raw signed shift), the gap's direction is automatic. A center anchor has no direction, so the gap is a no-op there. Negative values overlap.
 
 ## `align` / `distribute` / `stack` — `@samirdamle/calipers/align`

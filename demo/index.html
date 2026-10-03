@@ -270,8 +270,10 @@
   }
   window.addEventListener('pointermove', (e) => {
     if (!drag) return;
-    drag.el.style.left = `${drag.left + e.clientX - drag.x}px`;
-    drag.el.style.top = `${drag.top + e.clientY - drag.y}px`;
+    // Snap to integer px: pointer drags can leave fractional layouts, which the
+    // integer offset chain cannot measure exactly (would show phantom ~1px).
+    drag.el.style.left = `${Math.round(drag.left + e.clientX - drag.x)}px`;
+    drag.el.style.top = `${Math.round(drag.top + e.clientY - drag.y)}px`;
     if (drag.el.closest('#stage')) update();
   });
   window.addEventListener('pointerup', () => (drag = null));

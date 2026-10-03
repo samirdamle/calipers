@@ -3,7 +3,7 @@ import { px, shiftTranslate } from '../internal/dom.js';
 import { normalizeGap } from '../internal/gap.js';
 import { rendered } from '../internal/rendered.js';
 import { rectOf } from '../rect/index.js';
-import type { Anchor, Gap, Measurable, Point, Rect } from '../types.js';
+import type { Anchor, Box, Gap, Measurable, Point, Rect } from '../types.js';
 
 export interface PlaceAt {
 	/** Anchor of the `of` target. @default 'cc' */
@@ -51,7 +51,10 @@ export function place(el: HTMLElement, options: PlaceOptions = {}): void {
 	const gap = normalizeGap(options.gap);
 	if (using === 'transform') {
 		// Translate is relative: deltas in screen px need no frame conversion.
-		const target = targetPoint(options.at, 'viewport');
+		// Measure the target in visual space too — mixing the integer offset
+		// chain (border) with the fractional visual rect misplaces the box by
+		// up to ~1px on fractional layouts.
+		const target = targetPoint(options.at, 'viewport', 'visual');
 		const { rect, translate } = rendered(el, 'visual');
 		const cur = anchorPoint(rect, anchor);
 		const dir = gapDirection(rect, anchor);
@@ -87,6 +90,7 @@ function gapDirection(rect: Rect, anchor: Anchor): Point {
 function targetPoint(
 	at: PlaceAt | Point | Rect | undefined,
 	space: 'viewport' | 'document',
+	box: Box = 'border',
 ): Point {
 	if (!at) return anchorPoint(rectOf('viewport', { space }), 'cc');
 	if (isRawPoint(at)) {
@@ -104,10 +108,7 @@ function targetPoint(
 			? { x: of.x + window.scrollX, y: of.y + window.scrollY }
 			: { ...of };
 	}
-	return anchorPoint(
-		rectOf(of, { box: 'border', space }),
-		placeAt.anchor ?? 'cc',
-	);
+	return anchorPoint(rectOf(of, { box, space }), placeAt.anchor ?? 'cc');
 }
 
 function isRawPoint(v: unknown): v is Point {
