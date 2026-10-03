@@ -1,5 +1,75 @@
 import { describe, expect, it, vi } from 'vitest';
-import { align, distribute } from './index.js';
+import { align, distribute, stack } from './index.js';
+
+describe('stack', () => {
+	it('stacks downward from a reference with a gap, centered', () => {
+		mockStyle();
+		const blue = box(100, 100, 50, 50); // bottom 150, center-x 125
+		const reds = [box(0, 0), box(200, 0)];
+		stack(reds, { to: blue, direction: 'b', gap: 10, align: 'c' });
+		expect(reds.map(translateOf)).toEqual(['120px 160px', '-80px 180px']);
+		vi.restoreAllMocks();
+	});
+
+	it('stacks upward from a source at the bottom', () => {
+		mockStyle();
+		const blue = box(100, 200, 50, 50); // top 200, center-x 125
+		const reds = [box(0, 0), box(300, 50)];
+		stack(reds, { to: blue, direction: 't', gap: 10, align: 'c' });
+		// nearest the source first: the lower red goes directly above it
+		expect(translateOf(reds[0])).toBe('120px 160px');
+		expect(translateOf(reds[1])).toBe('-180px 130px');
+		vi.restoreAllMocks();
+	});
+
+	it('stacks horizontally with lateral top alignment', () => {
+		mockStyle();
+		const blue = box(100, 100, 50, 50); // right 150, top 100
+		const reds = [box(0, 0, 20, 10), box(0, 200, 20, 10)];
+		stack(reds, { to: blue, direction: 'r', gap: 5, align: 't' });
+		expect(reds.map(translateOf)).toEqual(['155px 100px', '180px -100px']);
+		vi.restoreAllMocks();
+	});
+
+	it('aligns laterally to the anchor edges', () => {
+		mockStyle();
+		const blue = box(100, 100, 50, 50);
+		const left = box(0, 0);
+		const right = box(0, 0);
+		stack([left], { to: blue, direction: 'b', gap: 0, align: 'l' });
+		stack([right], { to: blue, direction: 'b', gap: 0, align: 'r' });
+		expect(translateOf(left)).toBe('100px 150px');
+		expect(translateOf(right)).toBe('140px 150px');
+		vi.restoreAllMocks();
+	});
+
+	it('without `to`, seeds the trailing extreme and leaves it put', () => {
+		mockStyle();
+		const els = [box(0, 0), box(0, 100), box(0, 50)];
+		stack(els, { direction: 'b', gap: 0 });
+		// the topmost box is the seed and never moves
+		expect(els.map(translateOf)).toEqual(['', '0px -80px', '0px -40px']);
+		vi.restoreAllMocks();
+	});
+
+	it('is idempotent: repeating the same call is a no-op', () => {
+		mockStyleLive();
+		const blue = box(100, 100, 50, 50);
+		const reds = [box(0, 0), box(200, 0)];
+		stack(reds, { to: blue, direction: 'b', gap: 10 });
+		const afterFirst = reds.map(translateOf);
+		stack(reds, { to: blue, direction: 'b', gap: 10 });
+		stack(reds, { to: blue, direction: 'b', gap: 10 });
+		expect(reds.map(translateOf)).toEqual(afterFirst);
+		vi.restoreAllMocks();
+	});
+
+	it('no-ops on empty lists', () => {
+		mockStyle();
+		expect(() => stack([], { direction: 't' })).not.toThrow();
+		vi.restoreAllMocks();
+	});
+});
 
 function mockOffset(
 	el: HTMLElement,
