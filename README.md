@@ -65,7 +65,7 @@ Every number names its **box** (`content` | `border` | `margin` | `visual` | `bb
 ## Docs
 
 - [API reference](docs/API.md) — every function, field, and option
-- [Playground demo](demo/index.html) — drag boxes, watch measurements update (`pnpm demo`)
+- [Playground demo](https://samirdamle.github.io/calipers/demo/) — drag boxes, watch measurements update (or `pnpm demo` locally)
 - [Library plan](docs/plans/calipers-plan.md) and [goal](docs/meta/goal.md)
 
 ## License
