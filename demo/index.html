@@ -18,14 +18,16 @@
   button:hover { border-color: #f0dd82; }
   button.on { border-color: #f0dd82; color: #f0dd82; }
   input[type="number"] { background: #23232c; color: #e8e8ee; border: 1px solid #3a3a46; border-radius: 6px; padding: 6px 8px; font-size: 13px; width: 56px; }
-  #stage, #stage2 { position: relative; background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; overflow: hidden; touch-action: none; }
+  #stage, #stage2, #stage3 { position: relative; background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; overflow: hidden; touch-action: none; }
   #stage { height: 340px; }
   #stage2 { height: 260px; }
+  #stage3 { height: 220px; }
   .box { position: absolute; display: flex; align-items: flex-start; justify-content: center; font-weight: 700; font-size: 20px; border-radius: 8px; cursor: grab; user-select: none; box-sizing: border-box; padding-top: 6px; }
   .box.a { width: 120px; height: 90px; left: 60px; top: 60px; background: #3b5bd6; }
   .box.b { width: 150px; height: 70px; left: 320px; top: 180px; background: #b0433a; }
   .box.red { background: #b0433a; }
   .box.blue { background: #3b5bd6; }
+  .box.badge { background: #f0dd82; color: #141419; font-size: 14px; }
   .box:active { cursor: grabbing; }
   pre { background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; padding: 12px 16px; font-size: 12.5px; line-height: 1.6; overflow-x: auto; min-height: 120px; }
   .anchor-dot { position: absolute; width: 8px; height: 8px; margin: -4px; border-radius: 50%; background: #f0dd82; pointer-events: none; z-index: 5; }
@@ -68,6 +70,24 @@
     <button type="button" id="reset">reset A</button>
   </div>
   <pre id="placeCode">// click Place</pre>
+
+  <h2>Place — many at once</h2>
+  <p class="hint">One call positions every badge. By default each badge lands under its own button (corresponding pairing); tick the box to pile all three onto the first button instead (one shared target). Drag the buttons around and re-place.</p>
+  <div class="controls">
+    <button type="button" id="placeManyBtn">Place badges</button>
+    <label><input type="checkbox" id="sharedTarget" /> one shared target</label>
+    <label>gap <input type="number" id="placeManyGap" value="8" step="1" /></label>
+    <button type="button" id="reset3">reset</button>
+  </div>
+  <pre id="placeManyCode">// click Place badges</pre>
+  <div id="stage3">
+    <div class="box blue" style="width:90px;height:50px;left:40px;top:30px">1</div>
+    <div class="box blue" style="width:90px;height:50px;left:230px;top:30px">2</div>
+    <div class="box blue" style="width:90px;height:50px;left:420px;top:30px">3</div>
+    <div class="box badge" style="width:44px;height:28px;left:70px;top:160px">★</div>
+    <div class="box badge" style="width:44px;height:28px;left:260px;top:160px">★</div>
+    <div class="box badge" style="width:44px;height:28px;left:450px;top:160px">★</div>
+  </div>
 
   <h2>Align — many objects</h2>
   <p class="hint">Drag the boxes, then align the reds to the blue box — or stack them. Alignment stays on (highlighted) and doubles as the stack's sideways alignment. Give gap x and y different values for a staircase cascade.</p>
@@ -302,6 +322,29 @@
     boxA.style.left = '60px';
     boxA.style.top = '60px';
     update();
+  });
+
+  // Place-many demo: one call positions every badge. Each badge's top-center
+  // lands on its own button's bottom-center (corresponding pairing), or — with
+  // the checkbox — all three pile onto the first button (one shared target).
+  const manyBtns = [...document.querySelectorAll('#stage3 .box.blue')];
+  const badges = [...document.querySelectorAll('#stage3 .box.badge')];
+  const home3 = new Map();
+  for (const el of [...manyBtns, ...badges]) home3.set(el, { left: el.style.left, top: el.style.top });
+  document.getElementById('placeManyBtn').addEventListener('click', () => {
+    const shared = document.getElementById('sharedTarget').checked;
+    const gap = parseFloat(document.getElementById('placeManyGap').value) || 0;
+    const of = shared ? manyBtns[0] : manyBtns;
+    place(badges, { anchor: 'tc', at: { anchor: 'bc', of }, gap });
+    document.getElementById('placeManyCode').textContent =
+      `place(badges, { anchor: 'tc', at: { anchor: 'bc', of: ${shared ? 'button1' : 'buttons'} }, gap: ${gap} })`;
+  });
+  document.getElementById('reset3').addEventListener('click', () => {
+    for (const [el, home] of home3) {
+      el.style.removeProperty('translate');
+      el.style.left = home.left;
+      el.style.top = home.top;
+    }
   });
 
   // Align demos: reds to the blue box, or distribute the reds.

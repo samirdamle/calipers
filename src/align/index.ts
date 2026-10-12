@@ -2,7 +2,13 @@ import { isElement, shiftTranslate } from '../internal/dom.js';
 import { normalizeGap } from '../internal/gap.js';
 import { rendered } from '../internal/rendered.js';
 import { rectOf } from '../rect/index.js';
-import type { Box, Gap, Measurable, Rect } from '../types.js';
+import type {
+	Box,
+	ElementDisplacement,
+	Gap,
+	Measurable,
+	Rect,
+} from '../types.js';
 
 export type AlignEdge =
 	| 'left'
@@ -20,6 +26,12 @@ export interface AlignOptions {
 	to?: Measurable;
 	/** Box model for measurement. @default 'border' */
 	box?: Box;
+	/**
+	 * Read-only mode: compute the displacements without moving anything.
+	 * Returns `[{ el, dx, dy }, …]` in input order, zeros included for
+	 * elements that wouldn't move. @default false
+	 */
+	dryRun?: boolean;
 }
 
 export type DistributeAxis = 'x' | 'y';
@@ -29,6 +41,12 @@ export interface DistributeOptions {
 	gap?: number;
 	/** Box model for measurement. @default 'border' */
 	box?: Box;
+	/**
+	 * Read-only mode: compute the displacements without moving anything.
+	 * Returns `[{ el, dx, dy }, …]` in input order, zeros included for
+	 * elements that wouldn't move. @default false
+	 */
+	dryRun?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -65,10 +83,26 @@ function mean(vals: number[]): number {
 export function align(
 	els: ArrayLike<Element>,
 	edge: AlignEdge,
+	options?: AlignOptions & { dryRun?: false },
+): void;
+export function align(
+	els: ArrayLike<Element>,
+	edge: AlignEdge,
+	options: AlignOptions & { dryRun: true },
+): ElementDisplacement[];
+export function align(
+	els: ArrayLike<Element>,
+	edge: AlignEdge,
+	options?: AlignOptions,
+): undefined | ElementDisplacement[];
+export function align(
+	els: ArrayLike<Element>,
+	edge: AlignEdge,
 	options: AlignOptions = {},
-): void {
+): undefined | ElementDisplacement[] {
+	const dryRun = options.dryRun ?? false;
 	const list = Array.from(els) as HTMLElement[];
-	if (list.length === 0) return;
+	if (list.length === 0) return dryRun ? [] : undefined;
 	const box = options.box ?? 'border';
 	const ax: Axis =
 		edge === 'left' || edge === 'right' || edge === 'center-x' ? 'x' : 'y';
@@ -83,15 +117,16 @@ export function align(
 					items.map((it) => edgePos(edge, it.rect)),
 				);
 
-	for (const { el, rect, translate } of items) {
-		const delta = line - edgePos(edge, rect);
-		shiftTranslate(
-			el,
-			translate,
-			ax === 'x' ? delta : 0,
-			ax === 'y' ? delta : 0,
-		);
-	}
+	const results: ElementDisplacement[] = items.map(
+		({ el, rect, translate }) => {
+			const delta = line - edgePos(edge, rect);
+			const dx = ax === 'x' ? delta : 0;
+			const dy = ax === 'y' ? delta : 0;
+			if (!dryRun) shiftTranslate(el, translate, dx, dy);
+			return { el, dx, dy };
+		},
+	);
+	return dryRun ? results : undefined;
 }
 
 function edgePos(edge: AlignEdge, r: Rect): number {
@@ -128,10 +163,26 @@ function aggregate(edge: AlignEdge, vals: number[]): number {
 export function distribute(
 	els: ArrayLike<Element>,
 	axis: DistributeAxis,
+	options?: DistributeOptions & { dryRun?: false },
+): void;
+export function distribute(
+	els: ArrayLike<Element>,
+	axis: DistributeAxis,
+	options: DistributeOptions & { dryRun: true },
+): ElementDisplacement[];
+export function distribute(
+	els: ArrayLike<Element>,
+	axis: DistributeAxis,
+	options?: DistributeOptions,
+): undefined | ElementDisplacement[];
+export function distribute(
+	els: ArrayLike<Element>,
+	axis: DistributeAxis,
 	options: DistributeOptions = {},
-): void {
+): undefined | ElementDisplacement[] {
+	const dryRun = options.dryRun ?? false;
 	const list = Array.from(els) as HTMLElement[];
-	if (list.length < 2) return;
+	if (list.length < 2) return dryRun ? [] : undefined;
 	const box = options.box ?? 'border';
 	const ax: Axis = axis;
 
@@ -145,17 +196,19 @@ export function distribute(
 	const sizes = items.reduce((sum, it) => sum + size(it.rect, ax), 0);
 	const gap = options.gap ?? (span - sizes) / (items.length - 1);
 
+	const byEl = new Map<HTMLElement, { dx: number; dy: number }>();
 	let cursor = pos(first, ax);
 	for (const { el, rect, translate } of items) {
 		const delta = cursor - pos(rect, ax);
-		shiftTranslate(
-			el,
-			translate,
-			ax === 'x' ? delta : 0,
-			ax === 'y' ? delta : 0,
-		);
+		const dx = ax === 'x' ? delta : 0;
+		const dy = ax === 'y' ? delta : 0;
+		if (!dryRun) shiftTranslate(el, translate, dx, dy);
+		byEl.set(el, { dx, dy });
 		cursor += size(rect, ax) + gap;
 	}
+	if (!dryRun) return undefined;
+	// Report in input order, not positional order.
+	return list.map((el) => ({ el, ...(byEl.get(el) ?? { dx: 0, dy: 0 }) }));
 }
 
 /** Which way a stack grows. */
@@ -190,6 +243,12 @@ export interface StackOptions {
 	align?: StackAlign;
 	/** Box model for measurement. @default 'border' */
 	box?: Box;
+	/**
+	 * Read-only mode: compute the displacements without moving anything.
+	 * Returns `[{ el, dx, dy }, …]` in input order, zeros included for
+	 * elements that wouldn't move (the anchor reports zeros). @default false
+	 */
+	dryRun?: boolean;
 }
 
 /**
@@ -203,10 +262,23 @@ export interface StackOptions {
  */
 export function stack(
 	els: ArrayLike<Element>,
+	options?: StackOptions & { dryRun?: false },
+): void;
+export function stack(
+	els: ArrayLike<Element>,
+	options: StackOptions & { dryRun: true },
+): ElementDisplacement[];
+export function stack(
+	els: ArrayLike<Element>,
+	options?: StackOptions,
+): undefined | ElementDisplacement[];
+export function stack(
+	els: ArrayLike<Element>,
 	options: StackOptions = {},
-): void {
+): undefined | ElementDisplacement[] {
+	const dryRun = options.dryRun ?? false;
 	const list = Array.from(els) as HTMLElement[];
-	if (list.length === 0) return;
+	if (list.length === 0) return dryRun ? [] : undefined;
 	const box = options.box ?? 'border';
 	const direction = options.direction ?? 'b';
 	const lateral = options.align ?? 'c';
@@ -253,27 +325,30 @@ export function stack(
 					size(b.rect, ax) -
 					(pos(a.rect, ax) + size(a.rect, ax)),
 		);
-	if (targets.length === 0) return;
+	if (targets.length === 0) return dryRun ? [] : undefined;
 
 	// The anchor's leading edge, where the first slot starts.
 	let cursor = forward
 		? pos(anchorRect, ax) + size(anchorRect, ax) + gapAx
 		: pos(anchorRect, ax) - gapAx;
 	let step = 0;
+	const byEl = new Map<HTMLElement, { dx: number; dy: number }>();
+	if (anchorEl) byEl.set(anchorEl, { dx: 0, dy: 0 });
 	for (const { el, rect, translate } of targets) {
 		step += 1;
 		const s = size(rect, ax);
 		const slot = forward ? cursor : cursor - s;
 		const delta = slot - pos(rect, ax);
 		const lat = lateralOffset(lateral, anchorRect, rect, ax) + step * gapLat;
-		shiftTranslate(
-			el,
-			translate,
-			ax === 'x' ? delta : lat,
-			ax === 'y' ? delta : lat,
-		);
+		const dx = ax === 'x' ? delta : lat;
+		const dy = ax === 'y' ? delta : lat;
+		if (!dryRun) shiftTranslate(el, translate, dx, dy);
+		byEl.set(el, { dx, dy });
 		cursor = forward ? slot + s + gapAx : slot - gapAx;
 	}
+	if (!dryRun) return undefined;
+	// Report in input order, not nearest-first order.
+	return list.map((el) => ({ el, ...(byEl.get(el) ?? { dx: 0, dy: 0 }) }));
 }
 
 /** Is `r` further toward the trailing end of the stack than `best`? */
