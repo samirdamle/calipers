@@ -69,11 +69,12 @@
 	"scripts": {
 		"attw": "attw --pack --profile esm-only",
 		"build": "tsup",
-		"ci": "pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm size",
+		"ci": "pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm size && pnpm recipes",
 		"demo": "pnpm build && node scripts/serve.mjs .",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"prepublishOnly": "pnpm build",
+		"recipes": "node scripts/check-recipes.mjs",
 		"size": "node scripts/check-size.mjs",
 		"test": "vitest run",
 		"typecheck": "tsc --noEmit"
