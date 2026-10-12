@@ -1,4 +1,8 @@
 {
+	"author": {
+		"name": "Samir Damle",
+		"url": "https://github.com/samirdamle"
+	},
 	"description": "Tiny, dependency-free geometry toolkit for the web: measure, align, place, and design with HTML and SVG elements.",
 	"devDependencies": {
 		"@arethetypeswrong/cli": "^0.18.2",
@@ -38,12 +42,29 @@
 	"files": [
 		"dist"
 	],
+	"keywords": [
+		"geometry",
+		"rect",
+		"position",
+		"align",
+		"measure",
+		"svg",
+		"html",
+		"util",
+		"layout",
+		"viewport",
+		"responsive"
+	],
 	"license": "MIT",
 	"main": "./dist/index.js",
 	"name": "@samirdamle/calipers",
 	"packageManager": "pnpm@12.8.1",
 	"publishConfig": {
 		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/samirdamle/calipers.git"
 	},
 	"scripts": {
 		"attw": "attw --pack --profile esm-only",
@@ -60,5 +81,5 @@
 	"sideEffects": false,
 	"type": "module",
 	"types": "./dist/index.d.ts",
-	"version": "0.0.0"
+	"version": "0.1.0"
 }
