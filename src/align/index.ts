@@ -94,12 +94,12 @@ export function align(
 	els: ArrayLike<Element>,
 	edge: AlignEdge,
 	options?: AlignOptions,
-): void | ElementDisplacement[];
+): undefined | ElementDisplacement[];
 export function align(
 	els: ArrayLike<Element>,
 	edge: AlignEdge,
 	options: AlignOptions = {},
-): void | ElementDisplacement[] {
+): undefined | ElementDisplacement[] {
 	const dryRun = options.dryRun ?? false;
 	const list = Array.from(els) as HTMLElement[];
 	if (list.length === 0) return dryRun ? [] : undefined;
@@ -174,12 +174,12 @@ export function distribute(
 	els: ArrayLike<Element>,
 	axis: DistributeAxis,
 	options?: DistributeOptions,
-): void | ElementDisplacement[];
+): undefined | ElementDisplacement[];
 export function distribute(
 	els: ArrayLike<Element>,
 	axis: DistributeAxis,
 	options: DistributeOptions = {},
-): void | ElementDisplacement[] {
+): undefined | ElementDisplacement[] {
 	const dryRun = options.dryRun ?? false;
 	const list = Array.from(els) as HTMLElement[];
 	if (list.length < 2) return dryRun ? [] : undefined;
@@ -271,11 +271,11 @@ export function stack(
 export function stack(
 	els: ArrayLike<Element>,
 	options?: StackOptions,
-): void | ElementDisplacement[];
+): undefined | ElementDisplacement[];
 export function stack(
 	els: ArrayLike<Element>,
 	options: StackOptions = {},
-): void | ElementDisplacement[] {
+): undefined | ElementDisplacement[] {
 	const dryRun = options.dryRun ?? false;
 	const list = Array.from(els) as HTMLElement[];
 	if (list.length === 0) return dryRun ? [] : undefined;

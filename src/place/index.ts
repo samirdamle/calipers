@@ -72,7 +72,7 @@ export function place(
 export function place(
 	els: Placeable,
 	options?: PlaceOptions,
-): void | ElementDisplacement[];
+): undefined | ElementDisplacement[];
 /**
  * Position elements so each one's anchor lands on the target point, plus
  * `offset` and `gap`. Reads layout once per element. Repeating the same call
@@ -85,7 +85,7 @@ export function place(
 export function place(
 	els: Placeable,
 	options: PlaceOptions = {},
-): void | ElementDisplacement[] {
+): undefined | ElementDisplacement[] {
 	const dryRun = options.dryRun ?? false;
 	const list = resolveEls(els);
 	const { anchor = 'tl', offset = {}, using = 'transform' } = options;
@@ -178,7 +178,8 @@ function resolveTargetPoints(
 		const out: Point[] = [];
 		for (const e of Array.from(of as ArrayLike<Element | string | Rect>)) {
 			if (typeof e === 'string') {
-				for (const m of Array.from(document.querySelectorAll(e))) out.push(toPoint(m));
+				for (const m of Array.from(document.querySelectorAll(e)))
+					out.push(toPoint(m));
 			} else out.push(toPoint(e));
 		}
 		return out;

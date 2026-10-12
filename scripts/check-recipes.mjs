@@ -45,7 +45,7 @@ try {
 		}
 		// .mjs so top-level import/export parse as a module.
 		const file = join(dir, `snippet-${start}.mjs`);
-		writeFileSync(file, code + '\n');
+		writeFileSync(file, `${code}\n`);
 		try {
 			execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });
 			console.log(`PASS  line ${start}`);
