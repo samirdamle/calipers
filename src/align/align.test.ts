@@ -327,3 +327,79 @@ describe('distribute', () => {
 		vi.restoreAllMocks();
 	});
 });
+
+describe('dryRun', () => {
+	it('align returns deltas in input order without moving anything', () => {
+		mockStyle();
+		const a = box(0, 0);
+		const b = box(30, 0);
+		const out = align([a, b], 'left', { dryRun: true });
+		expect(out).toEqual([
+			{ el: a, dx: 0, dy: 0 },
+			{ el: b, dx: -30, dy: 0 },
+		]);
+		expect(translateOf(a)).toBe('');
+		expect(translateOf(b)).toBe('');
+		vi.restoreAllMocks();
+	});
+
+	it('align returns [] for an empty list', () => {
+		mockStyle();
+		expect(align([], 'left', { dryRun: true })).toEqual([]);
+		vi.restoreAllMocks();
+	});
+
+	it('distribute returns deltas in input order, not positional order', () => {
+		mockStyle();
+		const a = box(0, 0, 10, 10);
+		const b = box(100, 0, 10, 10);
+		// listed out of positional order: b first
+		const out = distribute([b, a], 'x', { gap: 20, dryRun: true });
+		// positional order is a(0), b(100); cursor starts at 0: a stays, b → 30
+		expect(out).toEqual([
+			{ el: b, dx: -70, dy: 0 },
+			{ el: a, dx: 0, dy: 0 },
+		]);
+		expect(translateOf(a)).toBe('');
+		expect(translateOf(b)).toBe('');
+		vi.restoreAllMocks();
+	});
+
+	it('distribute returns [] for a single element', () => {
+		mockStyle();
+		const a = box(0, 0, 10, 10);
+		expect(distribute([a], 'x', { dryRun: true })).toEqual([]);
+		vi.restoreAllMocks();
+	});
+
+	it('stack reports zeros for the anchor and input order for the rest', () => {
+		mockStyle();
+		const blue = box(100, 100, 50, 50);
+		const reds = [box(0, 0), box(200, 0)];
+		const out = stack([blue, ...reds], {
+			to: blue,
+			direction: 'b',
+			gap: 10,
+			align: 'c',
+			dryRun: true,
+		});
+		expect(out).toEqual([
+			{ el: blue, dx: 0, dy: 0 },
+			{ el: reds[0], dx: 120, dy: 160 },
+			{ el: reds[1], dx: -80, dy: 180 },
+		]);
+		expect(translateOf(blue)).toBe('');
+		expect(reds.map(translateOf)).toEqual(['', '']);
+		vi.restoreAllMocks();
+	});
+
+	it('still returns undefined without dryRun', () => {
+		mockStyle();
+		const a = box(0, 0);
+		const b = box(30, 0);
+		expect(align([a, b], 'left')).toBeUndefined();
+		expect(distribute([a, b], 'x')).toBeUndefined();
+		expect(stack([a, b], {})).toBeUndefined();
+		vi.restoreAllMocks();
+	});
+});

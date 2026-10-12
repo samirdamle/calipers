@@ -53,10 +53,10 @@ import { place } from '@samirdamle/calipers/place';
 
 | Import | Does | Size (min+br) |
 |---|---|---|
-| `@samirdamle/calipers/rect` | `rectOf` — resolve anything measurable into a rect, with an explicit box model and coordinate space | 863 B |
-| `@samirdamle/calipers/measure` | `measure` / `calipers` — pairwise geometry, plus a DOM-free pure core | 1723 B |
-| `@samirdamle/calipers/place` | `place` — position an element relative to a point or another element | 1444 B |
-| `@samirdamle/calipers/align` | `align` / `distribute` / `stack` — design-tool alignment, even spacing, and stacking | 1890 B |
+| `@samirdamle/calipers/rect` | `rectOf` — resolve anything measurable into a rect, with an explicit box model and coordinate space | 893 B |
+| `@samirdamle/calipers/measure` | `measure` / `calipers` — pairwise geometry, plus a DOM-free pure core | 1726 B |
+| `@samirdamle/calipers/place` | `place` — position element(s) relative to a point or another element, with read-only `dryRun` | 1935 B |
+| `@samirdamle/calipers/align` | `align` / `distribute` / `stack` — design-tool alignment, even spacing, and stacking, with read-only `dryRun` | 2113 B |
 
 Sizes are measured from the actual build (see `size-budgets.json`); a stale figure is a bug.
 
@@ -276,6 +276,35 @@ place(tooltipEl, {
   gap: 8,
 });
 ```
+
+**Place a whole set at once.** A selector expands to all matches — every tooltip parked in one call.
+```js
+place(document.querySelectorAll('.tooltip'), {
+  anchor: 'tc',
+  at: { anchor: 'bc', of: '.toolbar' },
+  gap: 8,
+});
+```
+
+**Each tooltip under its own button.** Several targets pair correspondingly with the elements — tooltip *i* goes under button *i*.
+```js
+place(document.querySelectorAll('.tooltip'), {
+  anchor: 'tc',
+  at: { anchor: 'bc', of: document.querySelectorAll('.button') },
+  gap: 8,
+});
+```
+
+**Preview before you commit.** `dryRun` returns the displacements without touching the DOM — animate them yourself, or gate an undo-stack push on "would anything move?".
+```js
+const moves = place(document.querySelectorAll('.card'), {
+  anchor: 'tl',
+  at: { x: 0, y: 0 },
+  dryRun: true,
+});
+// → [{ el, dx, dy }, …] in input order, zeros for cards already there
+if (moves.some(m => m.dx !== 0 || m.dy !== 0)) pushUndo(moves);
+```
 </details>
 
 <a id="recipes-align"></a>
@@ -312,6 +341,15 @@ align(document.querySelectorAll('.card'), 'top', { to: '.hero' });
 **Optical alignment.** Include margins so *text* lines up, not just boxes.
 ```js
 align(document.querySelectorAll('.row'), 'left', { box: 'margin' });
+```
+
+**Rehearse an alignment.** `dryRun` reports what would move — highlight the movers in the UI before committing, or skip the layout pass when everything reports zero.
+```js
+import { align } from '@samirdamle/calipers/align';
+
+const moves = align(document.querySelectorAll('.card'), 'top', { dryRun: true });
+// → [{ el, dx, dy }, …] in input order
+moves.filter(m => m.dy !== 0).forEach(m => m.el.classList.add('will-move'));
 ```
 </details>
 

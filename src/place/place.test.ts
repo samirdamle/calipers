@@ -337,3 +337,188 @@ describe('place gap', () => {
 		vi.restoreAllMocks();
 	});
 });
+
+describe('place dryRun', () => {
+	it('returns displacements without moving anything', () => {
+		const el = document.createElement('div');
+		vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(
+			fakeDOMRect(100, 100, 50, 40),
+		);
+		mockStyle();
+		const out = place(el, {
+			anchor: 'tl',
+			at: { x: 200, y: 200 },
+			dryRun: true,
+		});
+		expect(out).toEqual([{ el, dx: 100, dy: 100 }]);
+		expect(translateOf(el)).toBe('');
+		vi.restoreAllMocks();
+	});
+
+	it('reports zeros for an already-placed element', () => {
+		const el = document.createElement('div');
+		vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(
+			fakeDOMRect(200, 200, 50, 40),
+		);
+		mockStyle();
+		const out = place(el, {
+			anchor: 'tl',
+			at: { x: 200, y: 200 },
+			dryRun: true,
+		});
+		expect(out).toEqual([{ el, dx: 0, dy: 0 }]);
+		vi.restoreAllMocks();
+	});
+
+	it('does not upgrade position or write left/top in position mode', () => {
+		const el = document.createElement('div');
+		mockOffset(el, { left: 10, top: 20, width: 50, height: 40, parent: null });
+		mockStyle();
+		const out = place(el, {
+			anchor: 'tl',
+			at: { x: 200, y: 200 },
+			using: 'position',
+			dryRun: true,
+		});
+		// dx = 200 − anchor(0) − border.x(10), dy = 200 − anchor(0) − border.y(20)
+		expect(out).toEqual([{ el, dx: 190, dy: 180 }]);
+		expect(el.style.position).toBe('');
+		expect(el.style.left).toBe('');
+		expect(el.style.top).toBe('');
+		vi.restoreAllMocks();
+	});
+
+	it('still returns undefined without dryRun', () => {
+		const el = document.createElement('div');
+		vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(
+			fakeDOMRect(0, 0, 10, 10),
+		);
+		mockStyle();
+		expect(place(el, { anchor: 'tl', at: { x: 5, y: 5 } })).toBeUndefined();
+		vi.restoreAllMocks();
+	});
+});
+
+describe('place with multiple elements', () => {
+	it('places every match of a selector', () => {
+		const a = document.createElement('div');
+		const b = document.createElement('div');
+		a.className = 'tip';
+		b.className = 'tip';
+		document.body.append(a, b);
+		vi.spyOn(a, 'getBoundingClientRect').mockReturnValue(
+			fakeDOMRect(0, 0, 10, 10),
+		);
+		vi.spyOn(b, 'getBoundingClientRect').mockReturnValue(
+			fakeDOMRect(50, 50, 10, 10),
+		);
+		mockStyle();
+		place('.tip', { anchor: 'tl', at: { x: 100, y: 100 } });
+		expect(translateOf(a)).toBe('100px 100px');
+		expect(translateOf(b)).toBe('50px 50px');
+		a.remove();
+		b.remove();
+		vi.restoreAllMocks();
+	});
+
+	it('broadcasts one target to every element', () => {
+		const a = document.createElement('div');
+		const b = document.createElement('div');
+		vi.spyOn(a, 'getBoundingClientRect').mockReturnValue(
+			fakeDOMRect(0, 0, 10, 10),
+		);
+		vi.spyOn(b, 'getBoundingClientRect').mockReturnValue(
+			fakeDOMRect(0, 0, 10, 10),
+		);
+		mockStyle();
+		const out = place([a, b], {
+			anchor: 'tl',
+			at: { x: 100, y: 100 },
+			dryRun: true,
+		});
+		expect(out).toEqual([
+			{ el: a, dx: 100, dy: 100 },
+			{ el: b, dx: 100, dy: 100 },
+		]);
+		vi.restoreAllMocks();
+	});
+
+	it('pairs elements with corresponding targets', () => {
+		const t1 = document.createElement('div');
+		const t2 = document.createElement('div');
+		const b1 = document.createElement('div');
+		const b2 = document.createElement('div');
+		for (const [el, r] of [
+			[t1, fakeDOMRect(0, 0, 10, 10)],
+			[t2, fakeDOMRect(0, 0, 10, 10)],
+			[b1, fakeDOMRect(0, 100, 40, 20)],
+			[b2, fakeDOMRect(200, 100, 40, 20)],
+		] as const)
+			vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(r);
+		mockStyle();
+		const out = place([t1, t2], {
+			anchor: 'tc',
+			at: { anchor: 'bc', of: [b1, b2] },
+			gap: 8,
+			dryRun: true,
+		});
+		// t1 → b1 bc (20, 120): dx = 20 − 5, dy = 120 + 8 − 0
+		// t2 → b2 bc (220, 120): dx = 220 − 5, dy = 120 + 8 − 0
+		expect(out).toEqual([
+			{ el: t1, dx: 15, dy: 128 },
+			{ el: t2, dx: 215, dy: 128 },
+		]);
+		vi.restoreAllMocks();
+	});
+
+	it('zips to the shorter side when counts differ', () => {
+		const t1 = document.createElement('div');
+		const t2 = document.createElement('div');
+		const t3 = document.createElement('div');
+		const b1 = document.createElement('div');
+		const b2 = document.createElement('div');
+		for (const [el, r] of [
+			[t1, fakeDOMRect(0, 0, 10, 10)],
+			[t2, fakeDOMRect(0, 0, 10, 10)],
+			[t3, fakeDOMRect(0, 0, 10, 10)],
+			[b1, fakeDOMRect(0, 100, 40, 20)],
+			[b2, fakeDOMRect(200, 100, 40, 20)],
+		] as const)
+			vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(r);
+		mockStyle();
+		const out = place([t1, t2, t3], {
+			anchor: 'tc',
+			at: { anchor: 'bc', of: [b1, b2] },
+			dryRun: true,
+		});
+		expect(out).toEqual([
+			{ el: t1, dx: 15, dy: 120 },
+			{ el: t2, dx: 215, dy: 120 },
+			{ el: t3, dx: 0, dy: 0 },
+		]);
+		vi.restoreAllMocks();
+	});
+
+	it('broadcasts a single-element target list to every element', () => {
+		const t1 = document.createElement('div');
+		const t2 = document.createElement('div');
+		const b1 = document.createElement('div');
+		for (const [el, r] of [
+			[t1, fakeDOMRect(0, 0, 10, 10)],
+			[t2, fakeDOMRect(0, 0, 10, 10)],
+			[b1, fakeDOMRect(0, 100, 40, 20)],
+		] as const)
+			vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(r);
+		mockStyle();
+		const out = place([t1, t2], {
+			anchor: 'tc',
+			at: { anchor: 'bc', of: [b1] },
+			dryRun: true,
+		});
+		expect(out).toEqual([
+			{ el: t1, dx: 15, dy: 120 },
+			{ el: t2, dx: 15, dy: 120 },
+		]);
+		vi.restoreAllMocks();
+	});
+});

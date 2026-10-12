@@ -31,6 +31,24 @@ export type Box = 'content' | 'border' | 'margin' | 'visual' | 'bbox';
 export type Space = 'viewport' | 'document';
 
 /**
+ * A computed displacement in px: how far something would move along each axis.
+ * Signed, in the screen's coordinate orientation — `{ dx: 10, dy: -5 }` means
+ * 10px right and 5px up. The `dryRun` mode of the manipulation verbs returns these.
+ */
+export interface Displacement {
+	dx: number;
+	dy: number;
+}
+
+/**
+ * A displacement tied to the element it was computed for — the per-element
+ * result shape returned by the manipulation verbs in `dryRun` mode.
+ */
+export interface ElementDisplacement extends Displacement {
+	el: Element;
+}
+
+/**
  * A per-axis gap in px. A single number applies to both axes;
  * `[x, y]` / `{ x, y }` set each axis separately. Negative values overlap.
  */

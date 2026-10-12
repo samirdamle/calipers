@@ -130,17 +130,21 @@ type Anchor =
 
 ## `place` — `@samirdamle/calipers/place`
 
-Position `el` so its anchor lands on the target point, plus `offset` and `gap`.
+Position elements so each one's anchor lands on the target point, plus `offset` and `gap`.
 
 ```ts
-place(el: HTMLElement, options?: PlaceOptions): void
+place(els: Placeable, options?: PlaceOptions & { dryRun?: false }): void
+place(els: Placeable, options: PlaceOptions & { dryRun: true }): ElementDisplacement[]
+
+type Placeable = HTMLElement | ArrayLike<HTMLElement> | string;
 
 interface PlaceOptions {
-  anchor?: Anchor;                 // which point of el to position. default 'tl'
+  anchor?: Anchor;                 // which point of each element to position. default 'tl'
   at?: PlaceAt | Point | Rect;     // default: viewport center
   offset?: { x?: number; y?: number };
   gap?: Gap;                       // px between the placed box and the target; see below
   using?: 'transform' | 'position'; // default 'transform'
+  dryRun?: boolean;                // default false — see below
 }
 
 interface PlaceAt {
@@ -148,6 +152,10 @@ interface PlaceAt {
   of?: Measurable | Point | Rect;  // default 'viewport'
 }
 ```
+
+- A selector expands to **all** matches (like `calipers`) — `place('.tip', …)` positions every match, not just the first.
+- One target broadcasts to every element; several targets pair correspondingly with the elements — `place(tooltips, { at: { anchor: 'bc', of: buttons } })` parks each tooltip under its own button. Pairing zips to the shorter length; extras on either side are left untouched.
+- `dryRun: true` computes the displacements without touching the DOM and returns `[{ el, dx, dy }, …]` in input order (zeros included for elements that wouldn't move). The other verbs offer the same option with the same return shape. Use it to preview a move, animate the deltas yourself (e.g. with WAAPI or springs), or gate an undo-stack push on "would anything move?".
 
 - `at` as a raw `{ x, y }` point is interpreted in **viewport** coordinates (e.g. mouse `clientX/Y`).
 - `using: 'transform'` sets the CSS `translate` property — compositor-friendly, composes with `transform`, accumulates across calls. The target anchor is measured in **visual** (on-screen) space, so placement stays exact even on fractional layouts.
@@ -159,20 +167,25 @@ interface PlaceAt {
 Design-tool verbs, built on `rectOf` plus the CSS `translate` property — compositor-friendly, accumulates across calls, moves a single axis only (`stack` moves both, one axis at a time).
 
 ```ts
-align(els: ArrayLike<Element>, edge: AlignEdge, options?: AlignOptions): void
-distribute(els: ArrayLike<Element>, axis: 'x' | 'y', options?: DistributeOptions): void
-stack(els: ArrayLike<Element>, options?: StackOptions): void
+align(els: ArrayLike<Element>, edge: AlignEdge, options?: AlignOptions & { dryRun?: false }): void
+align(els: ArrayLike<Element>, edge: AlignEdge, options: AlignOptions & { dryRun: true }): ElementDisplacement[]
+distribute(els: ArrayLike<Element>, axis: 'x' | 'y', options?: DistributeOptions & { dryRun?: false }): void
+distribute(els: ArrayLike<Element>, axis: 'x' | 'y', options: DistributeOptions & { dryRun: true }): ElementDisplacement[]
+stack(els: ArrayLike<Element>, options?: StackOptions & { dryRun?: false }): void
+stack(els: ArrayLike<Element>, options: StackOptions & { dryRun: true }): ElementDisplacement[]
 
 type AlignEdge = 'left' | 'right' | 'top' | 'bottom' | 'center-x' | 'center-y';
 
 interface AlignOptions {
   to?: Measurable;  // reference to align to; omit → selection's extreme (edges) or mean (centers)
   box?: Box;        // default 'border'
+  dryRun?: boolean; // default false — return [{ el, dx, dy }, …] instead of moving
 }
 
 interface DistributeOptions {
   gap?: number;     // fixed gap in px; omit → even spacing across the selection span
   box?: Box;        // default 'border'
+  dryRun?: boolean; // default false — return [{ el, dx, dy }, …] instead of moving
 }
 
 type StackDirection = 't' | 'b' | 'l' | 'r';
@@ -184,6 +197,7 @@ interface StackOptions {
   gap?: Gap;            // axial separation; [x, y] / { x, y } adds a per-step lateral cascade; default 0
   align?: StackAlign;    // lateral alignment vs the anchor box; default 'c' (only the perpendicular axis applies)
   box?: Box;            // default 'border'
+  dryRun?: boolean;     // default false — return [{ el, dx, dy }, …] instead of moving
 }
 ```
 
@@ -200,7 +214,12 @@ interface Rect { x: number; y: number; width: number; height: number }
 type Box = 'content' | 'border' | 'margin' | 'visual' | 'bbox';
 type Space = 'viewport' | 'document';
 type Gap = number | [number, number] | { x: number; y: number }; // per-axis px; negative overlaps
+interface Displacement { dx: number; dy: number }       // signed px along each axis
+interface ElementDisplacement extends Displacement { el: Element } // dryRun result
+type Placeable = HTMLElement | ArrayLike<HTMLElement> | string;    // place() input
 ```
+
+`Displacement` / `ElementDisplacement` / `Placeable` are exported from the root barrel (`@samirdamle/calipers`); the per-module subpaths intentionally keep generic type names out of scope.
 
 ## Size budgets
 
@@ -214,4 +233,4 @@ Per-module budgets (min+br), enforced in CI by `scripts/check-size.mjs`:
 | `align.js` | 2048 B |
 | `index.js` (barrel) | 3584 B |
 
-Current measured sizes: rect 893 B, measure 1726 B, place 1625 B, align 1949 B, index 3177 B.
+Current measured sizes: rect 893 B, measure 1726 B, place 1935 B, align 2113 B, index 3554 B.
