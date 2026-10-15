@@ -1,9 +1,18 @@
 import { anchorPoint } from '../geom/index.js';
-import { px, shiftTranslate } from '../internal/dom.js';
+import { isElement, px, shiftTranslate } from '../internal/dom.js';
 import { normalizeGap } from '../internal/gap.js';
 import { rendered } from '../internal/rendered.js';
 import { rectOf } from '../rect/index.js';
-import type { Anchor, Box, Gap, Measurable, Point, Rect } from '../types.js';
+import type {
+	Anchor,
+	Box,
+	Displacement,
+	ElementDisplacement,
+	Gap,
+	Measurable,
+	Point,
+	Rect,
+} from '../types.js';
 
 export interface PlaceAt {
 	/** Anchor of the `of` target. @default 'cc' */
@@ -38,77 +47,94 @@ export interface PlaceOptions {
 	 * exact for absolute/fixed positioning.
 	 */
 	using?: 'transform' | 'position';
+	/**
+	 * Read-only mode: compute the displacements without moving anything.
+	 * Returns `[{ el, dx, dy }, …]` in input order, zeros included for
+	 * elements that wouldn't move. @default false
+	 */
+	dryRun?: boolean;
 }
 
 /**
- * Position `el` so its anchor lands on the target point, plus `offset` and `gap`.
- * Reads layout once per call. Repeating the same call is a no-op.
+ * Anything `place` can position: one element, several, or a selector —
+ * a selector expands to *all* matches (like `calipers`).
  */
-export function place(el: HTMLElement, options: PlaceOptions = {}): void {
+export type Placeable = HTMLElement | ArrayLike<HTMLElement> | string;
+
+export function place(
+	els: Placeable,
+	options?: PlaceOptions & { dryRun?: false },
+): void;
+export function place(
+	els: Placeable,
+	options: PlaceOptions & { dryRun: true },
+): ElementDisplacement[];
+export function place(
+	els: Placeable,
+	options?: PlaceOptions,
+): undefined | ElementDisplacement[];
+/**
+ * Position elements so each one's anchor lands on the target point, plus
+ * `offset` and `gap`. Reads layout once per element. Repeating the same call
+ * is a no-op.
+ *
+ * One target broadcasts to every element; several targets pair
+ * correspondingly with the elements (zipped to the shorter length — extras
+ * on either side are left untouched).
+ */
+export function place(
+	els: Placeable,
+	options: PlaceOptions = {},
+): undefined | ElementDisplacement[] {
+	const dryRun = options.dryRun ?? false;
+	const list = resolveEls(els);
 	const { anchor = 'tl', offset = {}, using = 'transform' } = options;
 	const ox = offset.x ?? 0;
 	const oy = offset.y ?? 0;
 	const gap = normalizeGap(options.gap);
-	if (using === 'transform') {
-		// Translate is relative: deltas in screen px need no frame conversion.
-		// Measure the target in visual space too — mixing the integer offset
-		// chain (border) with the fractional visual rect misplaces the box by
-		// up to ~1px on fractional layouts.
-		const target = targetPoint(options.at, 'viewport', 'visual');
-		const { rect, translate } = rendered(el, 'visual');
-		const cur = anchorPoint(rect, anchor);
-		const dir = gapDirection(rect, anchor);
-		shiftTranslate(
-			el,
-			translate,
-			target.x + ox + gap.x * dir.x - cur.x,
-			target.y + oy + gap.y * dir.y - cur.y,
-		);
-	} else {
-		placeByPosition(
-			el,
-			anchor,
-			targetPoint(options.at, 'document'),
-			ox,
-			oy,
-			gap,
-		);
-	}
+	const targets = resolveTargetPoints(options.at, using);
+	const results: ElementDisplacement[] = list.map((el, i) => {
+		// One target broadcasts; many pair correspondingly.
+		const target = targets.length === 1 ? targets[0] : targets[i];
+		if (!target) return { el, dx: 0, dy: 0 };
+		if (using === 'transform') {
+			const { dx, dy, translate } = transformDelta(
+				el,
+				anchor,
+				target,
+				ox,
+				oy,
+				gap,
+			);
+			if (!dryRun) shiftTranslate(el, translate, dx, dy);
+			return { el, dx, dy };
+		}
+		const p = positionPlacement(el, anchor, target, ox, oy, gap);
+		if (!dryRun) {
+			if (p.upgrade) el.style.position = 'absolute';
+			el.style.left = `${p.left}px`;
+			el.style.top = `${p.top}px`;
+		}
+		return { el, dx: p.dx, dy: p.dy };
+	});
+	return dryRun ? results : undefined;
 }
 
-/**
- * Per-axis push direction for `gap`: the sign of (box center − anchor point).
- * A center anchor yields (0, 0) — there is no direction to push.
- */
-function gapDirection(rect: Rect, anchor: Anchor): Point {
-	const c = anchorPoint(rect, 'cc');
-	const p = anchorPoint(rect, anchor);
-	return { x: Math.sign(c.x - p.x), y: Math.sign(c.y - p.y) };
+/** Resolve the elements to position. Selectors expand to all matches. */
+function resolveEls(els: Placeable): HTMLElement[] {
+	if (typeof els === 'string')
+		return Array.from(document.querySelectorAll(els)) as HTMLElement[];
+	if (isElement(els)) return [els as HTMLElement];
+	return Array.from(els);
 }
 
-/** Resolve the target to a point in the requested space. Raw points are viewport coords. */
-function targetPoint(
-	at: PlaceAt | Point | Rect | undefined,
-	space: 'viewport' | 'document',
-	box: Box = 'border',
-): Point {
-	if (!at) return anchorPoint(rectOf('viewport', { space }), 'cc');
-	if (isRawPoint(at)) {
-		return space === 'document'
-			? { x: at.x + window.scrollX, y: at.y + window.scrollY }
-			: { ...at };
-	}
-	const placeAt = at as PlaceAt;
-	const of: Measurable | Point | Rect =
-		typeof (at as Rect).width === 'number'
-			? (at as Rect)
-			: (placeAt.of ?? 'viewport');
-	if (isRawPoint(of)) {
-		return space === 'document'
-			? { x: of.x + window.scrollX, y: of.y + window.scrollY }
-			: { ...of };
-	}
-	return anchorPoint(rectOf(of, { box, space }), placeAt.anchor ?? 'cc');
+function isList(v: unknown): boolean {
+	return (
+		typeof v === 'object' &&
+		v !== null &&
+		typeof (v as { length?: unknown }).length === 'number' &&
+		!(v instanceof Element)
+	);
 }
 
 function isRawPoint(v: unknown): v is Point {
@@ -122,20 +148,107 @@ function isRawPoint(v: unknown): v is Point {
 }
 
 /**
- * Absolute left/top in the offsetParent frame (viewport frame for fixed).
- * Positions the border box; any existing `translate` still applies on top.
+ * Resolve the target(s) to points in the requested space. A single target
+ * (point, rect, element, viewport) yields one point; a selector or list of
+ * targets yields one point per target for corresponding pairing.
  */
-function placeByPosition(
+function resolveTargetPoints(
+	at: PlaceAt | Point | Rect | undefined,
+	using: 'transform' | 'position',
+): Point[] {
+	const space = using === 'transform' ? 'viewport' : 'document';
+	const box: Box = using === 'transform' ? 'visual' : 'border';
+	if (!at) return [anchorPoint(rectOf('viewport', { space }), 'cc')];
+	if (isRawPoint(at)) return [toSpace(at, space)];
+	if (typeof (at as Rect).width === 'number')
+		return [anchorPoint(at as Rect, 'cc')];
+	const placeAt = at as PlaceAt;
+	const anchor = placeAt.anchor ?? 'cc';
+	const of = placeAt.of ?? 'viewport';
+	if (isRawPoint(of)) return [toSpace(of, space)];
+	const toPoint = (t: Element | Rect): Point =>
+		anchorPoint(rectOf(t, { box, space }), anchor);
+	if (typeof of === 'string')
+		return Array.from(document.querySelectorAll(of)).map(toPoint);
+	if (isElement(of)) return [toPoint(of)];
+	if (of === window || of === 'viewport')
+		// rectOf treats these identically (the viewport rect).
+		return [anchorPoint(rectOf('viewport', { box, space }), anchor)];
+	if (isList(of)) {
+		const out: Point[] = [];
+		for (const e of Array.from(of as ArrayLike<Element | string | Rect>)) {
+			if (typeof e === 'string') {
+				for (const m of Array.from(document.querySelectorAll(e)))
+					out.push(toPoint(m));
+			} else out.push(toPoint(e));
+		}
+		return out;
+	}
+	// Only Element | Rect can reach here — strings, Window/'viewport', and
+	// points all returned above. (The `unknown` hop is for TS: its weak-type
+	// narrowing of Point can't prove Window is gone.)
+	return [toPoint(of as unknown as Element | Rect)];
+}
+
+/** Shift a viewport-space point into the requested space. */
+function toSpace(p: Point, space: 'viewport' | 'document'): Point {
+	return space === 'document'
+		? { x: p.x + window.scrollX, y: p.y + window.scrollY }
+		: { ...p };
+}
+
+/** The translate-mode displacement for one element (pure computation). */
+function transformDelta(
 	el: HTMLElement,
 	anchor: Anchor,
 	target: Point,
 	ox: number,
 	oy: number,
 	gap: Point,
-): void {
+): Displacement & { translate: Point } {
+	// Translate is relative: deltas in screen px need no frame conversion.
+	// Measure the target in visual space too — mixing the integer offset
+	// chain (border) with the fractional visual rect misplaces the box by
+	// up to ~1px on fractional layouts.
+	const { rect, translate } = rendered(el, 'visual');
+	const cur = anchorPoint(rect, anchor);
+	const dir = gapDirection(rect, anchor);
+	return {
+		translate,
+		dx: target.x + ox + gap.x * dir.x - cur.x,
+		dy: target.y + oy + gap.y * dir.y - cur.y,
+	};
+}
+
+/**
+ * Per-axis push direction for `gap`: the sign of (box center − anchor point).
+ * A center anchor yields (0, 0) — there is no direction to push.
+ */
+function gapDirection(rect: Rect, anchor: Anchor): Point {
+	const c = anchorPoint(rect, 'cc');
+	const p = anchorPoint(rect, anchor);
+	return { x: Math.sign(c.x - p.x), y: Math.sign(c.y - p.y) };
+}
+
+/**
+ * Absolute left/top in the offsetParent frame (viewport frame for fixed),
+ * plus the geometric displacement of the border box. Positions the border
+ * box; any existing `translate` still applies on top. Pure computation —
+ * the caller decides whether to write.
+ */
+function positionPlacement(
+	el: HTMLElement,
+	anchor: Anchor,
+	target: Point,
+	ox: number,
+	oy: number,
+	gap: Point,
+): { left: number; top: number; dx: number; dy: number; upgrade: boolean } {
 	const cs = getComputedStyle(el);
-	const positioned = cs.position === 'static' ? 'absolute' : cs.position;
-	if (cs.position === 'static') el.style.position = 'absolute';
+	const upgrade = cs.position === 'static';
+	const positioned = upgrade ? 'absolute' : cs.position;
+	// offsetParent depends only on ancestors, so reading it before the
+	// static→absolute upgrade gives the same frame the write would use.
 	const op = el.offsetParent as HTMLElement | null;
 
 	const border = rectOf(el, { box: 'border', space: 'document' });
@@ -159,6 +272,13 @@ function placeByPosition(
 		fx -= window.scrollX;
 		fy -= window.scrollY;
 	}
-	el.style.left = `${fx + ox + gap.x * dir.x - a.x - ml}px`;
-	el.style.top = `${fy + oy + gap.y * dir.y - a.y - mt}px`;
+	// The offsetParent frame cancels out of the displacement: the box moves
+	// from its current document position to the target-derived one.
+	return {
+		left: fx + ox + gap.x * dir.x - a.x - ml,
+		top: fy + oy + gap.y * dir.y - a.y - mt,
+		dx: target.x + ox + gap.x * dir.x - a.x - border.x,
+		dy: target.y + oy + gap.y * dir.y - a.y - border.y,
+		upgrade,
+	};
 }
