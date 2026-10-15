@@ -1,0 +1,5 @@
+# pnpm 12 blocks postinstall scripts by default; esbuild's postinstall
+# downloads its platform binary, which the build (tsup) and tests (vitest)
+# need. Approved via `pnpm approve-builds esbuild`.
+allowBuilds:
+  esbuild: true

@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Calipers playground</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: ui-sans-serif, system-ui, sans-serif; background: #141419; color: #e8e8ee; margin: 0; padding: 24px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 8px; color: #f0dd82; }
+  p.hint { color: #9a9aa5; font-size: 13px; margin: 0 0 16px; }
+  code { background: #23232c; padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+  label { display: flex; gap: 6px; align-items: center; color: #b9b9c4; }
+  select, button { background: #23232c; color: #e8e8ee; border: 1px solid #3a3a46; border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+  button { cursor: pointer; }
+  button:hover { border-color: #f0dd82; }
+  button.on { border-color: #f0dd82; color: #f0dd82; }
+  input[type="number"] { background: #23232c; color: #e8e8ee; border: 1px solid #3a3a46; border-radius: 6px; padding: 6px 8px; font-size: 13px; width: 56px; }
+  #stage, #stage2, #stage3 { position: relative; background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; overflow: hidden; touch-action: none; }
+  #stage { height: 340px; }
+  #stage2 { height: 260px; }
+  #stage3 { height: 220px; }
+  .box { position: absolute; display: flex; align-items: flex-start; justify-content: center; font-weight: 700; font-size: 20px; border-radius: 8px; cursor: grab; user-select: none; box-sizing: border-box; padding-top: 6px; }
+  .box.a { width: 120px; height: 90px; left: 60px; top: 60px; background: #3b5bd6; }
+  .box.b { width: 150px; height: 70px; left: 320px; top: 180px; background: #b0433a; }
+  .box.red { background: #b0433a; }
+  .box.blue { background: #3b5bd6; }
+  .box.badge { background: #f0dd82; color: #141419; font-size: 14px; }
+  .box:active { cursor: grabbing; }
+  pre { background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; padding: 12px 16px; font-size: 12.5px; line-height: 1.6; overflow-x: auto; min-height: 120px; }
+  .anchor-dot { position: absolute; width: 8px; height: 8px; margin: -4px; border-radius: 50%; background: #f0dd82; pointer-events: none; z-index: 5; }
+  .anchor-cue { position: absolute; width: 10px; height: 10px; margin: -5px; border-radius: 50%; border: 1px solid rgba(240,221,130,.4); cursor: pointer; z-index: 6; }
+  .anchor-cue:hover { background: rgba(240,221,130,.55); }
+  .anchor-cue.sel { background: #f0dd82; border-color: #f0dd82; }
+  #dims { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
+  #dims line { stroke: #8ab4ff; stroke-width: 1; }
+  #dims text { fill: #8ab4ff; font: 11px ui-monospace, monospace; }
+  svg.demo { background: #1b1b22; border: 1px solid #2c2c38; border-radius: 10px; }
+</style>
+</head>
+<body>
+  <h1>Calipers playground</h1>
+  <p class="hint">Run <code>pnpm build</code>, then <code>pnpm demo</code> and open this page. Drag the boxes.</p>
+
+  <h2>Measure — drag A and B</h2>
+  <p class="hint">Click any faint dot on a box to set that box's anchor directly.</p>
+  <div class="controls">
+    <label>A anchor <select id="anchorA"></select></label>
+    <label>B anchor <select id="anchorB"></select></label>
+    <label>box <select id="box"><option>border</option><option>content</option><option>margin</option><option>visual</option></select></label>
+    <label>space <select id="space"><option>viewport</option><option>document</option></select></label>
+    <label><input type="checkbox" id="dimsOn" checked /> dimensions</label>
+  </div>
+  <div id="stage">
+    <div id="boxA" class="box a">A</div>
+    <div id="boxB" class="box b">B</div>
+    <svg id="dims" aria-hidden="true"></svg>
+  </div>
+  <pre id="readout"></pre>
+
+  <h2>Place — put A's anchor on B's anchor</h2>
+  <p class="hint">Moves A so its selected anchor lands exactly on B's selected anchor. Gap pushes A back off B along the direction its anchor faces. Translate shifts the drawn box (composable, easy to reset); left/top moves it for real in layout.</p>
+  <div class="controls">
+    <button type="button" id="placeBtn">Place</button>
+    <label>gap x <input type="number" id="placeGapX" value="0" step="1" /></label>
+    <label>gap y <input type="number" id="placeGapY" value="0" step="1" /></label>
+    <label><input type="checkbox" id="useTranslate" checked /> Use CSS translate instead of CSS left/top</label>
+    <button type="button" id="reset">reset A</button>
+  </div>
+  <pre id="placeCode">// click Place</pre>
+
+  <h2>Place — many at once</h2>
+  <p class="hint">One call positions every badge. By default each badge lands under its own button (corresponding pairing); tick the box to pile all three onto the first button instead (one shared target). Drag the buttons around and re-place.</p>
+  <div class="controls">
+    <button type="button" id="placeManyBtn">Place badges</button>
+    <label><input type="checkbox" id="sharedTarget" /> one shared target</label>
+    <label>gap <input type="number" id="placeManyGap" value="8" step="1" /></label>
+    <button type="button" id="reset3">reset</button>
+  </div>
+  <pre id="placeManyCode">// click Place badges</pre>
+  <div id="stage3">
+    <div class="box blue" style="width:90px;height:50px;left:40px;top:30px">1</div>
+    <div class="box blue" style="width:90px;height:50px;left:230px;top:30px">2</div>
+    <div class="box blue" style="width:90px;height:50px;left:420px;top:30px">3</div>
+    <div class="box badge" style="width:44px;height:28px;left:70px;top:160px">★</div>
+    <div class="box badge" style="width:44px;height:28px;left:260px;top:160px">★</div>
+    <div class="box badge" style="width:44px;height:28px;left:450px;top:160px">★</div>
+  </div>
+
+  <h2>Align — many objects</h2>
+  <p class="hint">Drag the boxes, then align the reds to the blue box — or stack them. Alignment stays on (highlighted) and doubles as the stack's sideways alignment. Give gap x and y different values for a staircase cascade.</p>
+  <div class="controls">
+    <button type="button" data-align="left">left</button>
+    <button type="button" data-align="center-x">center-x</button>
+    <button type="button" data-align="right">right</button>
+    <button type="button" data-align="top">top</button>
+    <button type="button" data-align="center-y">center-y</button>
+    <button type="button" data-align="bottom">bottom</button>
+    <button type="button" data-dist="x">distribute x</button>
+    <button type="button" data-dist="y">distribute y</button>
+    <button type="button" id="reset2">reset</button>
+  </div>
+  <div class="controls">
+    <span>stack</span>
+    <button type="button" data-stack-dir="none" class="on">none</button>
+    <button type="button" data-stack-dir="t">up</button>
+    <button type="button" data-stack-dir="b">down</button>
+    <button type="button" data-stack-dir="l">left</button>
+    <button type="button" data-stack-dir="r">right</button>
+    <label>gap x <input type="number" id="stackGapX" value="10" step="1" /></label>
+    <label>gap y <input type="number" id="stackGapY" value="10" step="1" /></label>
+  </div>
+  <pre id="arrangeCode">// click align, distribute, or a stack direction</pre>
+  <div id="stage2">
+    <div class="box red" style="width:110px;height:60px;left:40px;top:40px">1</div>
+    <div class="box red" style="width:80px;height:80px;left:200px;top:140px">2</div>
+    <div class="box red" style="width:130px;height:50px;left:420px;top:60px">3</div>
+    <div class="box red" style="width:70px;height:70px;left:120px;top:180px">4</div>
+    <div id="boxBlue2" class="box blue" style="width:90px;height:90px;left:330px;top:90px">B</div>
+  </div>
+
+  <h2>SVG — bbox (local units) vs screen rect</h2>
+  <svg class="demo" id="svg" viewBox="0 0 200 100" width="420" height="210" role="img" aria-label="Rotated rectangle demo">
+    <title>Rotated rectangle</title>
+    <rect id="svgRect" x="50" y="20" width="60" height="40" transform="rotate(20 80 40)" fill="#3b5bd6" rx="4" />
+  </svg>
+  <pre id="svgReadout"></pre>
+
+<script type="module">
+  import { align, distribute, stack } from '../dist/align.js';
+  import { anchorPoint, measure } from '../dist/measure.js';
+  import { place } from '../dist/place.js';
+  import { rectOf } from '../dist/rect.js';
+
+  const CODES = ['tl','tc','tr','cl','cc','cr','bl','bc','br','t','b','l','r'];
+  const anchorA = document.getElementById('anchorA');
+  const anchorB = document.getElementById('anchorB');
+  for (const c of CODES) {
+    anchorA.add(new Option(c, c, c === 'cc', c === 'cc'));
+    anchorB.add(new Option(c, c, c === 'cc', c === 'cc'));
+  }
+  const boxSel = document.getElementById('box');
+  const spaceSel = document.getElementById('space');
+  const dimsOn = document.getElementById('dimsOn');
+  const boxA = document.getElementById('boxA');
+  const boxB = document.getElementById('boxB');
+  const stage = document.getElementById('stage');
+  const dims = document.getElementById('dims');
+  const readout = document.getElementById('readout');
+
+  const fmt = (n) => (typeof n === 'number' ? Math.round(n * 10) / 10 : n);
+  const fmtObj = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, fmt(v)]));
+
+  /** Parse a computed CSS `translate` value into px. */
+  function parseTranslate(value) {
+    if (!value || value === 'none') return { x: 0, y: 0 };
+    const [x = '0', y = '0'] = value.trim().split(/\s+/);
+    const px = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    return { x: px(x), y: px(y) };
+  }
+
+  /**
+   * The box as drawn: rectOf plus the element's CSS `translate` (set by
+   * place/align in transform mode). The offset chain doesn't include
+   * translate, so without this the overlays lag behind a moved box.
+   * 'visual' already includes it — don't double-count.
+   */
+  function placedRectOf(el) {
+    const r = rectOf(el, { box: boxSel.value, space: spaceSel.value });
+    if (boxSel.value === 'visual') return r;
+    const t = parseTranslate(getComputedStyle(el).translate);
+    return { ...r, x: r.x + t.x, y: r.y + t.y };
+  }
+
+  /** Selected-space rect → #stage pixel coordinates. */
+  function toStage(r) {
+    const sr = stage.getBoundingClientRect();
+    const sx = spaceSel.value === 'document' ? window.scrollX : 0;
+    const sy = spaceSel.value === 'document' ? window.scrollY : 0;
+    return { x: r.x - sx - sr.left, y: r.y - sy - sr.top, width: r.width, height: r.height };
+  }
+
+  // Anchor cue dots: faint, clickable, one per code per box. Built once, repositioned on update.
+  const cues = [];
+  for (const [el, sel] of [[boxA, anchorA], [boxB, anchorB]]) {
+    for (const code of CODES) {
+      const d = document.createElement('div');
+      d.className = 'anchor-cue';
+      d.title = code;
+      d.addEventListener('click', () => { sel.value = code; update(); });
+      stage.appendChild(d);
+      cues.push({ d, el, sel, code });
+    }
+  }
+
+  // Dimension-line elements: one dx set and one dy set, repositioned on update.
+  const NS = 'http://www.w3.org/2000/svg';
+  function svgEl(tag, attrs) {
+    const el = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    dims.appendChild(el);
+    return el;
+  }
+  const dxLine = svgEl('line', {}), dxT1 = svgEl('line', {}), dxT2 = svgEl('line', {});
+  const dxLabel = svgEl('text', { 'text-anchor': 'middle' });
+  const dyLine = svgEl('line', {}), dyT1 = svgEl('line', {}), dyT2 = svgEl('line', {});
+  const dyLabel = svgEl('text', { 'text-anchor': 'end', 'dominant-baseline': 'middle' });
+  const dxEls = [dxLine, dxT1, dxT2, dxLabel];
+  const dyEls = [dyLine, dyT1, dyT2, dyLabel];
+  const setLine = (el, x1, y1, x2, y2) => {
+    el.setAttribute('x1', x1); el.setAttribute('y1', y1);
+    el.setAttribute('x2', x2); el.setAttribute('y2', y2);
+  };
+  const show = (els, on) => { els.forEach((el) => { el.style.display = on ? '' : 'none'; }); };
+
+  function update() {
+    document.querySelectorAll('.anchor-dot').forEach((d) => { d.remove(); });
+    const rA = placedRectOf(boxA);
+    const rB = placedRectOf(boxB);
+    // measure() accepts rects — box/space are baked into rA/rB already.
+    const r = measure(rA, rB, {
+      anchor: anchorA.value,
+      ofAnchor: anchorB.value,
+      fields: ['dx', 'dy', 'distance', 'gapX', 'gapY', 'angleDeg', 'width', 'height', 'overlaps'],
+    });
+    const pA = toStage(r.pointA), pB = toStage(r.pointB);
+    const rAs = toStage(rA), rBs = toStage(rB);
+
+    // Active anchor points (yellow).
+    for (const p of [pA, pB]) {
+      const d = document.createElement('div');
+      d.className = 'anchor-dot';
+      d.style.left = `${p.x}px`;
+      d.style.top = `${p.y}px`;
+      stage.appendChild(d);
+    }
+
+    // Cue dots follow their boxes.
+    for (const { d, el, sel, code } of cues) {
+      const p = anchorPoint(toStage(placedRectOf(el)), code);
+      d.style.left = `${p.x}px`;
+      d.style.top = `${p.y}px`;
+      d.classList.toggle('sel', sel.value === code);
+    }
+
+    // Architectural dimension lines between the anchor points,
+    // offset 20px outside the blocks (top edge for dx, left edge for dy).
+    if (dimsOn.checked && Math.abs(pB.x - pA.x) >= 0.5) {
+      const y = Math.min(rAs.y, rBs.y) - 20;
+      setLine(dxLine, pA.x, y, pB.x, y);
+      setLine(dxT1, pA.x, y - 4, pA.x, y + 4);
+      setLine(dxT2, pB.x, y - 4, pB.x, y + 4);
+      dxLabel.setAttribute('x', (pA.x + pB.x) / 2);
+      dxLabel.setAttribute('y', y - 6);
+      dxLabel.textContent = `dx ${fmt(pB.x - pA.x)}`;
+      show(dxEls, true);
+    } else {
+      show(dxEls, false);
+    }
+    if (dimsOn.checked && Math.abs(pB.y - pA.y) >= 0.5) {
+      const x = Math.min(rAs.x, rBs.x) - 20;
+      setLine(dyLine, x, pA.y, x, pB.y);
+      setLine(dyT1, x - 4, pA.y, x + 4, pA.y);
+      setLine(dyT2, x - 4, pB.y, x + 4, pB.y);
+      dyLabel.setAttribute('x', x - 8);
+      dyLabel.setAttribute('y', (pA.y + pB.y) / 2);
+      dyLabel.textContent = `dy ${fmt(pB.y - pA.y)}`;
+      show(dyEls, true);
+    } else {
+      show(dyEls, false);
+    }
+
+    readout.textContent =
+      `measure(boxA, boxB, { anchor: '${anchorA.value}', ofAnchor: '${anchorB.value}', box: '${boxSel.value}', space: '${spaceSel.value}' })\n` +
+      `pointA ${JSON.stringify(fmtObj(r.pointA))}   pointB ${JSON.stringify(fmtObj(r.pointB))}\n` +
+      `dx ${fmt(r.dx)}   dy ${fmt(r.dy)}   distance ${fmt(r.distance)}\n` +
+      `gapX ${fmt(r.gapX)}   gapY ${fmt(r.gapY)}   angle ${fmt(r.angleDeg)}°\n` +
+      `A ${fmt(r.width)}×${fmt(r.height)}   overlaps ${r.overlaps}`;
+  }
+
+  // Dragging: left/top move the border box; translate (from place) stays put.
+  let drag = null;
+  for (const el of document.querySelectorAll('.box')) {
+    el.addEventListener('pointerdown', (e) => {
+      drag = { el, x: e.clientX, y: e.clientY, left: el.offsetLeft, top: el.offsetTop };
+      el.setPointerCapture(e.pointerId);
+    });
+  }
+  window.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    // Snap to integer px: pointer drags can leave fractional layouts, which the
+    // integer offset chain cannot measure exactly (would show phantom ~1px).
+    drag.el.style.left = `${Math.round(drag.left + e.clientX - drag.x)}px`;
+    drag.el.style.top = `${Math.round(drag.top + e.clientY - drag.y)}px`;
+    if (drag.el.closest('#stage')) update();
+  });
+  window.addEventListener('pointerup', () => (drag = null));
+  for (const sel of [anchorA, anchorB, boxSel, spaceSel]) sel.addEventListener('change', update);
+  dimsOn.addEventListener('change', update);
+
+  // Place demo: A's selected anchor onto B's selected anchor, plus gap.
+  document.getElementById('placeBtn').addEventListener('click', () => {
+    const using = document.getElementById('useTranslate').checked ? 'transform' : 'position';
+    const anchor = anchorA.value, ofAnchor = anchorB.value;
+    const gx = parseFloat(document.getElementById('placeGapX').value) || 0;
+    const gy = parseFloat(document.getElementById('placeGapY').value) || 0;
+    const opts = { anchor, at: { anchor: ofAnchor, of: boxB }, using };
+    let gapStr = '';
+    if (gx !== 0 || gy !== 0) {
+      opts.gap = { x: gx, y: gy };
+      gapStr = `, gap: { x: ${gx}, y: ${gy} }`;
+    }
+    place(boxA, opts);
+    document.getElementById('placeCode').textContent =
+      `place(boxA, { anchor: '${anchor}', at: { anchor: '${ofAnchor}', of: boxB }, using: '${using}'${gapStr} })`;
+    update();
+  });
+  document.getElementById('reset').addEventListener('click', () => {
+    boxA.style.removeProperty('translate');
+    boxA.style.left = '60px';
+    boxA.style.top = '60px';
+    update();
+  });
+
+  // Place-many demo: one call positions every badge. Each badge's top-center
+  // lands on its own button's bottom-center (corresponding pairing), or — with
+  // the checkbox — all three pile onto the first button (one shared target).
+  const manyBtns = [...document.querySelectorAll('#stage3 .box.blue')];
+  const badges = [...document.querySelectorAll('#stage3 .box.badge')];
+  const home3 = new Map();
+  for (const el of [...manyBtns, ...badges]) home3.set(el, { left: el.style.left, top: el.style.top });
+  document.getElementById('placeManyBtn').addEventListener('click', () => {
+    const shared = document.getElementById('sharedTarget').checked;
+    const gap = parseFloat(document.getElementById('placeManyGap').value) || 0;
+    const of = shared ? manyBtns[0] : manyBtns;
+    place(badges, { anchor: 'tc', at: { anchor: 'bc', of }, gap });
+    document.getElementById('placeManyCode').textContent =
+      `place(badges, { anchor: 'tc', at: { anchor: 'bc', of: ${shared ? 'button1' : 'buttons'} }, gap: ${gap} })`;
+  });
+  document.getElementById('reset3').addEventListener('click', () => {
+    for (const [el, home] of home3) {
+      el.style.removeProperty('translate');
+      el.style.left = home.left;
+      el.style.top = home.top;
+    }
+  });
+
+  // Align demos: reds to the blue box, or distribute the reds.
+  // Align buttons keep a persistent highlight per axis — the alignment stays
+  // in effect (via translate) and doubles as the stack's sideways alignment.
+  const blue2 = document.getElementById('boxBlue2');
+  const reds2 = [...document.querySelectorAll('#stage2 .box.red')];
+  const home2 = new Map();
+  for (const el of [...reds2, blue2]) home2.set(el, { left: el.style.left, top: el.style.top });
+  const alignState = { h: null, v: null };
+  const alignAxis = (edge) => (edge === 'left' || edge === 'center-x' || edge === 'right' ? 'h' : 'v');
+  const arrangeCode = document.getElementById('arrangeCode');
+  const showCall = (s) => { arrangeCode.textContent = s; };
+  document.querySelectorAll('[data-align]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const edge = btn.dataset.align;
+      const axis = alignAxis(edge);
+      alignState[axis] = edge;
+      document.querySelectorAll('[data-align]').forEach((b) => {
+        if (alignAxis(b.dataset.align) === axis) b.classList.toggle('on', b === btn);
+      });
+      align(reds2, edge, { to: blue2 });
+      showCall(`align(reds, '${edge}', { to: blue })`);
+    });
+  });
+  document.querySelector('[data-dist="x"]').addEventListener('click', () => {
+    distribute(reds2, 'x', { gap: 16 });
+    showCall(`distribute(reds, 'x', { gap: 16 })`);
+  });
+  document.querySelector('[data-dist="y"]').addEventListener('click', () => {
+    distribute(reds2, 'y', { gap: 16 });
+    showCall(`distribute(reds, 'y', { gap: 16 })`);
+  });
+  // Stack the reds from the blue box, immediately on direction click. The
+  // sideways alignment comes from the highlighted align button on the
+  // perpendicular axis (centered when none is highlighted).
+  const lateralFor = (dir) => {
+    const vertical = dir === 't' || dir === 'b';
+    const edge = vertical ? alignState.h : alignState.v;
+    if (vertical) return edge === 'left' ? 'l' : edge === 'right' ? 'r' : 'c';
+    return edge === 'top' ? 't' : edge === 'bottom' ? 'b' : 'c';
+  };
+  document.querySelectorAll('[data-stack-dir]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-stack-dir]').forEach((b) => { b.classList.toggle('on', b === btn); });
+      const dir = btn.dataset.stackDir;
+      if (dir === 'none') return;
+      const gx = parseFloat(document.getElementById('stackGapX').value) || 0;
+      const gy = parseFloat(document.getElementById('stackGapY').value) || 0;
+      // Equal x/y gaps collapse to the scalar form (axial only, as before);
+      // different values cascade each step into a staircase.
+      const gap = gx === gy ? gx : { x: gx, y: gy };
+      const gapStr = gx === gy ? `${gx}` : `{ x: ${gx}, y: ${gy} }`;
+      const lateral = lateralFor(dir);
+      stack(reds2, { to: blue2, direction: dir, gap, align: lateral });
+      showCall(`stack(reds, { to: blue, direction: '${dir}', gap: ${gapStr}, align: '${lateral}' })`);
+    });
+  });
+  document.getElementById('reset2').addEventListener('click', () => {
+    for (const [el, home] of home2) {
+      el.style.removeProperty('translate');
+      el.style.left = home.left;
+      el.style.top = home.top;
+    }
+    alignState.h = alignState.v = null;
+    document.querySelectorAll('[data-align].on').forEach((b) => { b.classList.remove('on'); });
+    document.querySelectorAll('[data-stack-dir]').forEach((b) => { b.classList.toggle('on', b.dataset.stackDir === 'none'); });
+  });
+
+  // SVG demo.
+  const svgRect = document.getElementById('svgRect');
+  document.getElementById('svgReadout').textContent =
+    `bbox (local SVG units):  ${JSON.stringify(rectOf(svgRect, { box: 'bbox' }))}\n` +
+    `screen rect (visual):     ${JSON.stringify(fmtObj(rectOf(svgRect, { box: 'visual' })))}`;
+
+  update();
+</script>
+</body>
+</html>
